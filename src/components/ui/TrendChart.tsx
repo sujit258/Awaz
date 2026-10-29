@@ -135,44 +135,55 @@ export default function TrendChart({
             </div>
           </div>
 
-          {/* Chart Bars */}
-          <div className="relative h-44 w-full flex items-end gap-1 sm:gap-2 pt-4 border-b border-[#E1E5EB]">
-            {trends.map((pt) => {
-              const reportHeightPct = Math.round((pt.newReports / maxVal) * 100);
-              const resolvedHeightPct = Math.round((pt.resolutions / maxVal) * 100);
+          {/* Chart Bars or Honest Zero State */}
+          {trends.reduce((sum, t) => sum + t.newReports + t.resolutions, 0) === 0 ? (
+            <div className="h-44 w-full flex flex-col items-center justify-center border-b border-[#E1E5EB] bg-[#F7F8FA]/40 rounded-lg text-center p-4">
+              <p className="text-xs font-semibold text-[#17212F]">
+                0 complaints logged in this {range}-day window
+              </p>
+              <p className="text-[11px] text-[#5B6573] mt-1 max-w-sm">
+                Verified delivery failure statistics will display here as consumers submit reports under our published methodology.
+              </p>
+            </div>
+          ) : (
+            <div className="relative h-44 w-full flex items-end gap-1 sm:gap-2 pt-4 border-b border-[#E1E5EB]">
+              {trends.map((pt) => {
+                const reportHeightPct = Math.round((pt.newReports / maxVal) * 100);
+                const resolvedHeightPct = Math.round((pt.resolutions / maxVal) * 100);
 
-              return (
-                <div
-                  key={pt.date}
-                  onMouseEnter={() => setActivePoint(pt)}
-                  onMouseLeave={() => setActivePoint(null)}
-                  onClick={() => setActivePoint(pt)}
-                  className="flex-1 h-full flex flex-col justify-end items-center group cursor-pointer"
-                >
-                  <div className="w-full flex items-end justify-center gap-0.5 h-full">
-                    {/* Complaints bar */}
-                    <div
-                      style={{ height: `${Math.max(reportHeightPct, 4)}%` }}
-                      className={`w-1/2 max-w-[12px] rounded-t-xs transition-all ${
-                        activePoint?.date === pt.date
-                          ? "bg-[#1B44AA]"
-                          : "bg-[#2457D6] group-hover:bg-[#1B44AA]"
-                      }`}
-                    ></div>
-                    {/* Resolutions bar */}
-                    <div
-                      style={{ height: `${Math.max(resolvedHeightPct, 4)}%` }}
-                      className={`w-1/2 max-w-[12px] rounded-t-xs transition-all ${
-                        activePoint?.date === pt.date
-                          ? "bg-[#125838]"
-                          : "bg-[#18794E] group-hover:bg-[#125838]"
-                      }`}
-                    ></div>
+                return (
+                  <div
+                    key={pt.date}
+                    onMouseEnter={() => setActivePoint(pt)}
+                    onMouseLeave={() => setActivePoint(null)}
+                    onClick={() => setActivePoint(pt)}
+                    className="flex-1 h-full flex flex-col justify-end items-center group cursor-pointer"
+                  >
+                    <div className="w-full flex items-end justify-center gap-0.5 h-full">
+                      {/* Complaints bar */}
+                      <div
+                        style={{ height: pt.newReports > 0 ? `${Math.max(reportHeightPct, 6)}%` : "0%" }}
+                        className={`w-1/2 max-w-[12px] rounded-t-xs transition-all ${
+                          activePoint?.date === pt.date
+                            ? "bg-[#1B44AA]"
+                            : "bg-[#2457D6] group-hover:bg-[#1B44AA]"
+                        }`}
+                      ></div>
+                      {/* Resolutions bar */}
+                      <div
+                        style={{ height: pt.resolutions > 0 ? `${Math.max(resolvedHeightPct, 6)}%` : "0%" }}
+                        className={`w-1/2 max-w-[12px] rounded-t-xs transition-all ${
+                          activePoint?.date === pt.date
+                            ? "bg-[#125838]"
+                            : "bg-[#18794E] group-hover:bg-[#125838]"
+                        }`}
+                      ></div>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* X Axis Labels */}
           <div className="flex justify-between text-[10px] text-[#5B6573] mt-2 tabular-nums">

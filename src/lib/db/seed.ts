@@ -5,6 +5,17 @@ import { subDays, startOfDay } from "date-fns";
 const prisma = new PrismaClient();
 
 async function main() {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_PRODUCTION_SEED !== "true"
+  ) {
+    console.error(
+      "❌ BLOCKED: Database seeding is forbidden in production environments.\n" +
+      "To run this intentionally, set ALLOW_PRODUCTION_SEED=true."
+    );
+    process.exit(1);
+  }
+
   console.log("🌱 Starting Awaz database seed...");
 
   // 1. Create or update Default Admin & Moderator

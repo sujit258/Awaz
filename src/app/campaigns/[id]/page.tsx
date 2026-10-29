@@ -193,7 +193,9 @@ function CampaignContent() {
 
           <div className="flex items-center gap-2 text-xs font-semibold text-[#17212F]">
             <Users className="h-4 w-4 text-[#2457D6]" />
-            <span>{campaign.participantCount} verified consumer participants</span>
+            <span>
+              {campaign.participantCount} verified consumer participant{campaign.participantCount !== 1 ? "s" : ""}
+            </span>
           </div>
         </div>
 
