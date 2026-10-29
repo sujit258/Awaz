@@ -223,4 +223,115 @@ test("Official consumer help destinations match verified national portals", () =
   assert.notEqual(eJagritiUrl, "https://edaakhil.nic.in"); // Legacy e-daakhil replaced
 });
 
+test("validateEvidenceFile validates allowed image and document formats", async () => {
+  const { validateEvidenceFile } = await import("../src/lib/storage/r2");
+
+  // Valid formats
+  assert.equal(validateEvidenceFile("screenshot.png", "image/png", 1024).valid, true);
+  assert.equal(validateEvidenceFile("invoice.pdf", "application/pdf", 50000).valid, true);
+  assert.equal(validateEvidenceFile("photo.jpg", "image/jpeg", 204800).valid, true);
+  assert.equal(validateEvidenceFile("photo.jpeg", "image/jpeg", 204800).valid, true);
+  assert.equal(validateEvidenceFile("receipt.webp", "image/webp", 15000).valid, true);
+  assert.equal(validateEvidenceFile("ios_photo.heic", "image/heic", 300000).valid, true);
+
+  // File size boundary
+  assert.equal(validateEvidenceFile("max.pdf", "application/pdf", 10 * 1024 * 1024).valid, true);
+  const oversized = validateEvidenceFile("huge.pdf", "application/pdf", 10 * 1024 * 1024 + 1);
+  assert.equal(oversized.valid, false);
+  assert.ok(oversized.error?.includes("10MB"));
+
+  const empty = validateEvidenceFile("empty.pdf", "application/pdf", 0);
+  assert.equal(empty.valid, false);
+
+  // Invalid MIME types & dangerous extensions
+  assert.equal(validateEvidenceFile("malware.exe", "application/x-msdownload", 1000).valid, false);
+  assert.equal(validateEvidenceFile("script.sh", "text/x-shellscript", 1000).valid, false);
+  assert.equal(validateEvidenceFile("page.html", "text/html", 1000).valid, false);
+  assert.equal(validateEvidenceFile("spoofed.php.png", "application/x-php", 1000).valid, false);
+});
+
+test("generateEvidenceStorageKey produces unpredictable, report-scoped keys", async () => {
+  const { generateEvidenceStorageKey } = await import("../src/lib/storage/r2");
+  const reportId = "test-report-123";
+
+  const key1 = generateEvidenceStorageKey(reportId, "png");
+  const key2 = generateEvidenceStorageKey(reportId, "png");
+
+  // Keys must start with evidence/<reportId>/
+  assert.ok(key1.startsWith(`evidence/${reportId}/`));
+  assert.ok(key1.endsWith(".png"));
+
+  // Keys must be cryptographically distinct / unpredictable
+  assert.notEqual(key1, key2);
+
+  // Check pattern: evidence/<reportId>/<uuid>-<timestamp>.<ext>
+  const keyRegex = new RegExp(`^evidence/${reportId}/[a-f0-9-]+-\\d+\\.png$`);
+  assert.ok(keyRegex.test(key1));
+});
+
+test("getR2Config supports R2 and S3 variable conventions and defaults bucket to awaz", async () => {
+  const { getR2Config } = await import("../src/lib/storage/r2");
+
+  const originalEnv = { ...process.env };
+  try {
+    delete process.env.R2_BUCKET;
+    delete process.env.R2_ENDPOINT;
+    delete process.env.R2_ACCESS_KEY_ID;
+    delete process.env.R2_SECRET_ACCESS_KEY;
+    delete process.env.S3_BUCKET;
+    delete process.env.S3_ENDPOINT;
+    delete process.env.S3_ACCESS_KEY_ID;
+    delete process.env.S3_SECRET_ACCESS_KEY;
+
+    // Unconfigured
+    const unconf = getR2Config();
+    assert.equal(unconf.isConfigured, false);
+    assert.equal(unconf.bucket, "awaz"); // Default bucket name is awaz
+    assert.equal(unconf.region, "auto");
+
+    // Configured via R2_*
+    process.env.R2_BUCKET = "awaz";
+    process.env.R2_ENDPOINT = "https://example-account.r2.cloudflarestorage.com";
+    process.env.R2_ACCESS_KEY_ID = "test-r2-key-id";
+    process.env.R2_SECRET_ACCESS_KEY = "test-r2-secret-key";
+
+    const confR2 = getR2Config();
+    assert.equal(confR2.isConfigured, true);
+    assert.equal(confR2.bucket, "awaz");
+    assert.equal(confR2.endpoint, "https://example-account.r2.cloudflarestorage.com");
+    assert.equal(confR2.region, "auto");
+  } finally {
+    process.env = originalEnv;
+  }
+});
+
+test("Presigned upload and download URLs are generated correctly with S3/R2 client", async () => {
+  const { createPresignedUploadUrl, createPresignedDownloadUrl, resetR2ClientForTesting } = await import("../src/lib/storage/r2");
+
+  const originalEnv = { ...process.env };
+  try {
+    process.env.R2_BUCKET = "awaz";
+    process.env.R2_ENDPOINT = "https://example-account.r2.cloudflarestorage.com";
+    process.env.R2_ACCESS_KEY_ID = "mock-access-key-id";
+    process.env.R2_SECRET_ACCESS_KEY = "mock-secret-access-key-minimum-size";
+    process.env.R2_REGION = "auto";
+    resetR2ClientForTesting();
+
+    const uploadUrl = await createPresignedUploadUrl("evidence/rep-1/file.png", "image/png", 5000, 300);
+    assert.ok(uploadUrl.includes("https://example-account.r2.cloudflarestorage.com/awaz/evidence/rep-1/file.png"));
+    assert.ok(uploadUrl.includes("X-Amz-Signature="));
+    assert.ok(uploadUrl.includes("X-Amz-Expires=300"));
+
+    const downloadUrl = await createPresignedDownloadUrl("evidence/rep-1/file.png", "tracking receipt.png", 900);
+    assert.ok(downloadUrl.includes("https://example-account.r2.cloudflarestorage.com/awaz/evidence/rep-1/file.png"));
+    assert.ok(downloadUrl.includes("X-Amz-Signature="));
+    assert.ok(downloadUrl.includes("response-content-disposition="));
+    assert.ok(downloadUrl.includes("X-Amz-Expires=900"));
+  } finally {
+    process.env = originalEnv;
+    resetR2ClientForTesting();
+  }
+});
+
+
 
