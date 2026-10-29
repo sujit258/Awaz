@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import DemoBanner from "@/components/ui/DemoBanner";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -93,6 +94,20 @@ export default function RootLayout({
         </Suspense>
         <main className="flex-1">{children}</main>
         <Footer />
+        <Analytics
+          beforeSend={(event) => {
+            // Strip any query strings to safeguard consumer report privacy
+            if (event.url.includes("?")) {
+              try {
+                const parsed = new URL(event.url, "https://awaz.suvidhatools.in");
+                return { ...event, url: parsed.pathname };
+              } catch {
+                return event;
+              }
+            }
+            return event;
+          }}
+        />
       </body>
     </html>
   );
