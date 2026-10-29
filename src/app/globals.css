@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --ink: #172b4d;
+    --action-blue: #2457d6;
+    --action-blue-hover: #1b44aa;
+    --teal: #087e8b;
+    --bg-page: #f7f8fa;
+    --surface: #ffffff;
+    --text-primary: #17212f;
+    --text-secondary: #5b6573;
+    --border-color: #e1e5eb;
+    --success: #18794e;
+    --success-bg: #edf7f1;
+    --warning: #946200;
+    --warning-bg: #fef7e6;
+    --error: #b42318;
+    --error-bg: #fef3f2;
+  }
+
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+/* Tabular figures for statistics and metrics */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus styles for keyboard accessibility (WCAG 2.2 AA) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #2457d6;
+  outline-offset: 2px;
+}

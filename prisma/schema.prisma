@@ -1,0 +1,265 @@
+// Awaz Database Schema (PostgreSQL / Neon)
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  CITIZEN
+  MODERATOR
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  AWAITING_DELIVERY
+  DELIVERED
+  CANCELLED
+  UNKNOWN
+}
+
+enum ComplaintStatus {
+  OPEN
+  RESOLVED_BY_CUSTOMER
+  DISPUTED
+  UNDER_REVIEW
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  EVIDENCE_SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+enum ReviewStatus {
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum RedactionStatus {
+  NOT_REDACTED
+  REDACTED_BY_USER
+  VERIFIED_REDACTED
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  CONCLUDED
+}
+
+model User {
+  id              String         @id @default(uuid())
+  email           String         @unique
+  passwordHash    String         @default("")
+  displayName     String?
+  role            UserRole       @default(CITIZEN)
+  accountStatus   AccountStatus  @default(ACTIVE)
+  verifiedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  reports         ComplaintReport[]
+  participations  CampaignParticipation[]
+  moderationLogs  ModerationAction[]      @relation("AdminModeration")
+  auditLogs       AuditLog[]              @relation("ActorAuditLogs")
+  issueUpdates    IssueUpdate[]           @relation("AuthorUpdates")
+
+  @@index([email])
+  @@index([role])
+}
+
+model Issue {
+  id                String            @id @default(uuid())
+  slug              String            @unique
+  companyId         String            @default("flipkart")
+  category          String            // e.g. "delayed_delivery", "tracking_stalled", "no_support"
+  title             String
+  description       String            // Neutral factual description
+  publicationStatus PublicationStatus @default(PUBLISHED)
+  publishedAt       DateTime?         @default(now())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  reports           ComplaintReport[]
+  updates           IssueUpdate[]
+  campaigns         ActionCampaign[]
+  snapshots         DailySnapshot[]
+
+  @@index([slug])
+  @@index([companyId])
+  @@index([category])
+  @@index([publicationStatus])
+}
+
+model ComplaintReport {
+  id                   String             @id @default(uuid())
+  referenceNumber      String             @unique // e.g. "AWZ-2026-X89J"
+  userId               String
+  issueId              String
+  orderDate            DateTime?
+  promisedDeliveryDate DateTime?
+  orderStatus          OrderStatus        @default(AWAITING_DELIVERY)
+  complaintStatus      ComplaintStatus    @default(OPEN)
+  verificationStatus   VerificationStatus @default(UNVERIFIED)
+  
+  summary              String
+  description          String             // Private by default
+  resolutionOutcome    String?            // What outcome would resolve it
+  approximateRegion    String?            // State/Region e.g. "Maharashtra", "Karnataka"
+  idempotencyKey       String?            @unique
+  hasMeaningfulUpdate  Boolean            @default(false)
+  
+  isDemo               Boolean            @default(false)
+
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issue                Issue              @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  evidence             Evidence[]
+
+  @@index([userId])
+  @@index([issueId])
+  @@index([verificationStatus])
+  @@index([complaintStatus])
+  @@index([orderStatus])
+  @@index([createdAt])
+}
+
+model Evidence {
+  id                 String           @id @default(uuid())
+  complaintReportId  String
+  storageKey         String
+  fileName           String
+  fileType           String           // e.g. "image/png", "application/pdf"
+  fileSize           Int              // in bytes
+  reviewStatus       ReviewStatus     @default(PENDING_REVIEW)
+  redactionStatus    RedactionStatus  @default(NOT_REDACTED)
+  reviewerId         String?
+  reviewNote         String?
+  retentionDeadline  DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  complaintReport    ComplaintReport  @relation(fields: [complaintReportId], references: [id], onDelete: Cascade)
+
+  @@index([complaintReportId])
+  @@index([reviewStatus])
+}
+
+model IssueUpdate {
+  id          String   @id @default(uuid())
+  issueId     String
+  authorId    String
+  updateType  String   // e.g. "OFFICIAL_STATEMENT", "METRIC_UPDATE", "MILESTONE"
+  publicContent String
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author      User     @relation("AuthorUpdates", fields: [authorId], references: [id])
+
+  @@index([issueId])
+  @@index([publishedAt])
+}
+
+model ActionCampaign {
+  id                 String                  @id @default(uuid())
+  issueId            String
+  title              String
+  objective          String
+  requestedAction    String
+  status             CampaignStatus          @default(ACTIVE)
+  publishedReportUrl String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  issue              Issue                   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  participations     CampaignParticipation[]
+
+  @@index([issueId])
+  @@index([status])
+}
+
+model CampaignParticipation {
+  id           String          @id @default(uuid())
+  campaignId   String
+  userId       String
+  joinedAt     DateTime        @default(now())
+  withdrawnAt  DateTime?
+
+  campaign     ActionCampaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, userId])
+  @@index([campaignId])
+  @@index([userId])
+}
+
+model DailySnapshot {
+  id                   String   @id @default(uuid())
+  date                 DateTime @db.Date
+  issueId              String
+  eligibleReportCount  Int      @default(0)
+  uniqueReporterCount  Int      @default(0)
+  evidenceBackedCount  Int      @default(0)
+  reportedResolvedCount Int     @default(0)
+  generatedAt          DateTime @default(now())
+
+  issue                Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, date])
+  @@index([issueId])
+  @@index([date])
+}
+
+model ModerationAction {
+  id         String   @id @default(uuid())
+  targetType String   // "REPORT", "EVIDENCE", "ISSUE", "USER"
+  targetId   String
+  action     String   // "VERIFY", "REJECT", "HIDE", "FLAG_DUPLICATE", "RECLASSIFY"
+  reason     String
+  adminId    String
+  createdAt  DateTime @default(now())
+
+  admin      User     @relation("AdminModeration", fields: [adminId], references: [id])
+
+  @@index([targetType, targetId])
+  @@index([adminId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String   // "LOGIN", "CREATE_REPORT", "STATUS_CHANGE", "JOIN_CAMPAIGN"
+  targetType String   @default("")
+  targetId   String   @default("")
+  metadata   String?  // JSON stringified payload
+  createdAt  DateTime @default(now())
+
+  actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([actorId])
+  @@index([createdAt])
+}
