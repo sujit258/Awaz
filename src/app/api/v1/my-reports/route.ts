@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
@@ -10,7 +12,10 @@ export async function GET() {
     }
 
     const reports = await prisma.complaintReport.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        isDeleted: false,
+      },
       orderBy: { createdAt: "desc" },
       include: {
         issue: {

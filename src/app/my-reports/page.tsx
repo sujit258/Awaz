@@ -6,6 +6,10 @@ import {
   FileText,
   CheckCircle2,
   ArrowRight,
+  AlertTriangle,
+  RefreshCw,
+  Clock,
+  ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -17,7 +21,7 @@ interface ReportItem {
   orderStatus: "AWAITING_DELIVERY" | "DELIVERED" | "CANCELLED" | "UNKNOWN";
   complaintStatus: "OPEN" | "RESOLVED_BY_CUSTOMER" | "DISPUTED" | "UNDER_REVIEW";
   verificationStatus: "UNVERIFIED" | "EVIDENCE_SUBMITTED" | "VERIFIED" | "REJECTED";
-  promisedDeliveryDate: string;
+  promisedDeliveryDate: string | null;
   createdAt: string;
   issue: {
     id: string;
@@ -34,58 +38,91 @@ interface ReportItem {
   }>;
 }
 
+function formatDateSafe(dateStr?: string | null, fallback = "Date unavailable") {
+  if (!dateStr) return fallback;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, "MMM d, yyyy");
+  } catch {
+    return fallback;
+  }
+}
+
 export default function MyReportsPage() {
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+    let ignore = false;
 
-    async function loadData() {
+    async function init() {
       try {
-        const [authRes, reportsRes] = await Promise.all([
-          fetch("/api/v1/auth/me"),
-          fetch("/api/v1/my-reports"),
-        ]);
+        const authRes = await fetch("/api/v1/auth/me", { cache: "no-store" });
+        if (!authRes.ok) {
+          if (!ignore) {
+            setUser(null);
+            setReports([]);
+            setLoading(false);
+          }
+          return;
+        }
 
-        if (active) {
-          if (authRes.ok) {
-            const authData = await authRes.json();
-            setUser(authData.user);
+        const authData = await authRes.json();
+        if (!authData.user) {
+          if (!ignore) {
+            setUser(null);
+            setReports([]);
+            setLoading(false);
           }
-          if (reportsRes.ok) {
-            const data = await reportsRes.json();
-            setReports(data.reports || []);
-          }
+          return;
         }
-      } catch (e) {
-        console.error(e);
+        if (!ignore) setUser(authData.user);
+
+        const reportsRes = await fetch("/api/v1/my-reports", { cache: "no-store" });
+        if (!reportsRes.ok) {
+          const errData = await reportsRes.json().catch(() => ({}));
+          if (!ignore) setError(errData.error || "Failed to load your complaint reports.");
+          return;
+        }
+
+        const data = await reportsRes.json();
+        if (!ignore) setReports(data.reports || []);
+      } catch (err) {
+        console.error("My reports loading error:", err);
+        if (!ignore) setError("Network error while connecting to server. Please check your connection.");
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (!ignore) setLoading(false);
       }
     }
 
-    loadData();
+    init();
 
     return () => {
-      active = false;
+      ignore = true;
     };
   }, []);
 
   async function reloadReports() {
+    setLoading(true);
+    setError(null);
     try {
-      const reportsRes = await fetch("/api/v1/my-reports");
+      const reportsRes = await fetch("/api/v1/my-reports", { cache: "no-store" });
       if (reportsRes.ok) {
         const data = await reportsRes.json();
         setReports(data.reports || []);
+      } else {
+        const errData = await reportsRes.json().catch(() => ({}));
+        setError(errData.error || "Failed to reload reports.");
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      setError("Network error reloading reports.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -112,7 +149,7 @@ export default function MyReportsPage() {
         setStatusMessage("Report status updated successfully.");
         await reloadReports();
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setStatusMessage(data.error || "Failed to update report status.");
       }
     } catch {
@@ -122,69 +159,127 @@ export default function MyReportsPage() {
     }
   }
 
+  // 1. Loading State
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-16 text-center text-sm text-[#5B6573] animate-pulse">
-        Loading your complaint reports...
+      <div className="mx-auto max-w-5xl px-4 py-20 text-center space-y-4">
+        <div className="inline-flex h-10 w-10 animate-spin items-center justify-center rounded-full border-2 border-[#2457D6] border-t-transparent text-[#2457D6]">
+          <RefreshCw className="h-5 w-5" />
+        </div>
+        <p className="text-sm font-medium text-[#5B6573]">
+          Loading your complaint reports…
+        </p>
       </div>
     );
   }
 
+  // 2. Unauthenticated State
   if (!user) {
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center space-y-4">
-        <h2 className="text-xl font-bold text-[#17212F]">Please Sign In</h2>
-        <p className="text-xs text-[#5B6573]">
-          You must be signed in to view and manage your submitted reports.
-        </p>
-        <Link
-          href="/login"
-          className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-5 py-2.5 text-xs font-semibold text-white"
-        >
-          Sign In / Create Account
-        </Link>
+      <div className="mx-auto max-w-md px-4 py-16 text-center space-y-5">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F7F8FA] border border-[#E1E5EB] text-[#5B6573]">
+          <FileText className="h-6 w-6" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-[#17212F]">Sign in to View Your Reports</h2>
+          <p className="text-xs text-[#5B6573] leading-relaxed">
+            You must be signed in to manage reports linked to your citizen account.
+          </p>
+        </div>
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <Link
+            href="/login?redirect=/my-reports"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-[#2457D6] px-5 py-2.5 text-xs font-semibold text-white hover:bg-[#1B44AA] transition-colors"
+          >
+            <span>Sign In / Create Account</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <Link
+            href="/track"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg border border-[#E1E5EB] bg-white px-4 py-2.5 text-xs font-semibold text-[#17212F] hover:bg-[#F7F8FA]"
+          >
+            <span>Track Anonymous Report</span>
+          </Link>
+        </div>
       </div>
     );
   }
 
+  // 3. Authenticated View
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8 space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E1E5EB] pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#17212F]">
             My Complaint Reports
           </h1>
           <p className="text-xs text-[#5B6573] mt-1">
-            Track and update your reported issues for {user.email}
+            Logged in as <strong className="text-[#17212F]">{user.email}</strong>
           </p>
         </div>
 
-        <Link
-          href="/report"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#1B44AA]"
-        >
-          <span>Report Another Issue</span>
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => reloadReports()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#17212F] hover:bg-[#F7F8FA] transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Refresh</span>
+          </button>
+
+          <Link
+            href="/report"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#1B44AA] transition-colors"
+          >
+            <span>Report Another Issue</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       </div>
 
+      {/* Status or Error Notifications */}
       {statusMessage && (
-        <div className="rounded-lg bg-[#EDF7F1] border border-[#18794E]/20 p-3 text-xs text-[#18794E]">
-          {statusMessage}
+        <div className="rounded-lg bg-[#EDF7F1] border border-[#18794E]/20 p-3.5 text-xs text-[#18794E] flex items-center justify-between">
+          <span>{statusMessage}</span>
+          <button
+            onClick={() => setStatusMessage(null)}
+            className="font-bold hover:underline"
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
+      {error && (
+        <div className="rounded-lg bg-[#FEF3F2] border border-[#B42318]/20 p-4 text-xs text-[#B42318] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => reloadReports()}
+            className="rounded bg-[#B42318] text-white px-3 py-1 font-semibold hover:bg-[#911d13]"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Reports List */}
       {reports.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[#E1E5EB] bg-white p-12 text-center space-y-3">
-          <FileText className="mx-auto h-8 w-8 text-[#5B6573]" />
-          <h3 className="text-base font-semibold text-[#17212F]">No Reports Filed Yet</h3>
-          <p className="text-xs text-[#5B6573] max-w-sm mx-auto">
-            You haven’t submitted any complaint reports. If an order has passed its promised delivery date, report it to make it visible.
-          </p>
+        <div className="rounded-xl border border-dashed border-[#E1E5EB] bg-white p-12 text-center space-y-4">
+          <FileText className="mx-auto h-10 w-10 text-[#5B6573]/60" />
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold text-[#17212F]">No Reports Filed Yet</h3>
+            <p className="text-xs text-[#5B6573] max-w-sm mx-auto leading-relaxed">
+              You haven’t submitted any complaint reports with this account. If an order has passed its promised delivery date, document it to make it visible.
+            </p>
+          </div>
           <div className="pt-2">
             <Link
               href="/report"
-              className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white hover:bg-[#1B44AA] transition-colors"
             >
               Submit Your First Report
             </Link>
@@ -195,26 +290,27 @@ export default function MyReportsPage() {
           {reports.map((report) => (
             <div
               key={report.id}
-              className="rounded-xl border border-[#E1E5EB] bg-white p-6 shadow-xs space-y-4"
+              className="rounded-xl border border-[#E1E5EB] bg-white p-6 shadow-xs space-y-4 hover:border-[#CBD2DC] transition-colors"
             >
               {/* Header row */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E1E5EB] pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E1E5EB] pb-3">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold text-[#17212F] bg-[#F7F8FA] border border-[#E1E5EB] px-2 py-0.5 rounded">
+                  <span className="font-mono text-xs font-bold text-[#17212F] bg-[#F7F8FA] border border-[#E1E5EB] px-2.5 py-1 rounded">
                     {report.referenceNumber}
                   </span>
                   <Link
                     href={`/issues/${report.issue.slug}`}
-                    className="text-xs font-semibold text-[#2457D6] hover:underline"
+                    className="text-xs font-semibold text-[#2457D6] hover:underline inline-flex items-center gap-1"
                   >
-                    {report.issue.title}
+                    <span>{report.issue.title}</span>
+                    <ExternalLink className="h-3 w-3" />
                   </Link>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* Verification Badge */}
                   <span
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                    className={`px-2.5 py-0.5 rounded text-[11px] font-semibold ${
                       report.verificationStatus === "VERIFIED"
                         ? "bg-[#EDF7F1] text-[#18794E]"
                         : report.verificationStatus === "EVIDENCE_SUBMITTED"
@@ -229,7 +325,7 @@ export default function MyReportsPage() {
 
                   {/* Complaint Status Badge */}
                   <span
-                    className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                    className={`px-2.5 py-0.5 rounded text-[11px] font-semibold ${
                       report.complaintStatus === "RESOLVED_BY_CUSTOMER"
                         ? "bg-[#EDF7F1] text-[#18794E]"
                         : "bg-[#F7F8FA] text-[#172B4D] border border-[#E1E5EB]"
@@ -241,7 +337,7 @@ export default function MyReportsPage() {
               </div>
 
               {/* Summary & Description */}
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <h3 className="text-sm font-bold text-[#17212F]">{report.summary}</h3>
                 <p className="text-xs text-[#5B6573] leading-relaxed whitespace-pre-wrap">
                   {report.description}
@@ -249,20 +345,24 @@ export default function MyReportsPage() {
               </div>
 
               {/* Evidence Section */}
-              <div className="rounded-lg bg-[#F7F8FA] p-3 border border-[#E1E5EB] text-xs space-y-2">
+              <div className="rounded-lg bg-[#F7F8FA] p-3.5 border border-[#E1E5EB] text-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-[#17212F]">Attached Evidence Documents:</span>
                   <span className="text-[#5B6573]">
-                    {report.evidence.length} file{report.evidence.length !== 1 ? "s" : ""}
+                    {report.evidence ? report.evidence.length : 0} file
+                    {report.evidence && report.evidence.length !== 1 ? "s" : ""}
                   </span>
                 </div>
 
-                {report.evidence.length === 0 ? (
+                {!report.evidence || report.evidence.length === 0 ? (
                   <p className="text-[#5B6573] italic">No evidence uploaded yet (unverified status).</p>
                 ) : (
                   <div className="space-y-1">
                     {report.evidence.map((ev) => (
-                      <div key={ev.id} className="flex items-center justify-between py-1 border-t border-[#E1E5EB]/60">
+                      <div
+                        key={ev.id}
+                        className="flex items-center justify-between py-1 border-t border-[#E1E5EB]/60"
+                      >
                         <span className="font-mono text-[11px] text-[#17212F]">{ev.fileName}</span>
                         <span className="text-[10px] uppercase font-bold text-[#087E8B]">
                           {ev.reviewStatus}
@@ -275,9 +375,15 @@ export default function MyReportsPage() {
 
               {/* Citizen Actions: Update Delivery & Resolution Status */}
               <div className="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-[#E1E5EB]">
-                <span className="text-[11px] text-[#5B6573]">
-                  Submitted {format(new Date(report.createdAt), "MMM d, yyyy")}
-                </span>
+                <div className="flex items-center gap-2 text-[11px] text-[#5B6573]">
+                  <Clock className="h-3.5 w-3.5 text-[#5B6573]" />
+                  <span>Submitted on {formatDateSafe(report.createdAt)}</span>
+                  {report.promisedDeliveryDate && (
+                    <span className="border-l border-[#E1E5EB] pl-2">
+                      Promised delivery: {formatDateSafe(report.promisedDeliveryDate)}
+                    </span>
+                  )}
+                </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                   {report.complaintStatus !== "RESOLVED_BY_CUSTOMER" ? (
@@ -290,13 +396,13 @@ export default function MyReportsPage() {
                           "RESOLVED_BY_CUSTOMER"
                         )
                       }
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#18794E] px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-[#125838] transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#18794E] px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-[#125838] transition-colors disabled:opacity-50"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>Mark Delivered & Resolved</span>
+                      <span>{updatingId === report.id ? "Updating…" : "Mark Delivered & Resolved"}</span>
                     </button>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#18794E]">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#18794E] bg-[#EDF7F1] px-2.5 py-1 rounded">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>Resolution Confirmed</span>
                     </span>
