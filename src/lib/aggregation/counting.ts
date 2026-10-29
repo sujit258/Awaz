@@ -34,6 +34,7 @@ export async function getAggregateStats(options?: {
   includeDemo?: boolean;
 }): Promise<AggregateStats> {
   const whereClause: Record<string, unknown> = {
+    isDeleted: false,
     verificationStatus: {
       not: "REJECTED",
     },
@@ -56,7 +57,8 @@ export async function getAggregateStats(options?: {
 
   const [
     totalReports,
-    uniqueUsersResult,
+    registeredUsersResult,
+    anonymousReportsCount,
     evidenceBackedReports,
     reportedResolutions,
     openReports,
@@ -68,14 +70,19 @@ export async function getAggregateStats(options?: {
       where: whereClause,
     }),
 
-    // 2. Distinct unique reporters
+    // 2. Distinct registered reporters
     prisma.complaintReport.findMany({
-      where: whereClause,
+      where: { ...whereClause, userId: { not: null } },
       select: { userId: true },
       distinct: ["userId"],
     }),
 
-    // 3. Evidence-backed reports
+    // 3. Anonymous reports (each counted as distinct reporter)
+    prisma.complaintReport.count({
+      where: { ...whereClause, userId: null },
+    }),
+
+    // 4. Evidence-backed reports
     prisma.complaintReport.count({
       where: {
         ...whereClause,
@@ -86,7 +93,7 @@ export async function getAggregateStats(options?: {
       },
     }),
 
-    // 4. Reported resolutions
+    // 5. Reported resolutions
     prisma.complaintReport.count({
       where: {
         ...whereClause,
@@ -94,7 +101,7 @@ export async function getAggregateStats(options?: {
       },
     }),
 
-    // 5. Open reports
+    // 6. Open reports
     prisma.complaintReport.count({
       where: {
         ...whereClause,
@@ -102,7 +109,7 @@ export async function getAggregateStats(options?: {
       },
     }),
 
-    // 6. Under review reports
+    // 7. Under review reports
     prisma.complaintReport.count({
       where: {
         ...whereClause,
@@ -110,7 +117,7 @@ export async function getAggregateStats(options?: {
       },
     }),
 
-    // 7. Disputed reports
+    // 8. Disputed reports
     prisma.complaintReport.count({
       where: {
         ...whereClause,
@@ -119,7 +126,7 @@ export async function getAggregateStats(options?: {
     }),
   ]);
 
-  const uniqueReporters = uniqueUsersResult.length;
+  const uniqueReporters = registeredUsersResult.length + anonymousReportsCount;
   const resolutionRatePct =
     totalReports > 0 ? Math.round((reportedResolutions / totalReports) * 1000) / 10 : 0;
 
@@ -148,6 +155,7 @@ export async function getDailyTrends(
 
   const whereClause: Record<string, unknown> = {
     createdAt: { gte: startDate },
+    isDeleted: false,
     verificationStatus: { not: "REJECTED" },
   };
 

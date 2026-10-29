@@ -114,7 +114,8 @@ model Issue {
 model ComplaintReport {
   id                   String             @id @default(uuid())
   referenceNumber      String             @unique // e.g. "AWZ-2026-X89J"
-  userId               String
+  userId               String?
+  accessKeyHash        String?            // SHA-256 hash of secret key for anonymous management
   issueId              String
   orderDate            DateTime?
   promisedDeliveryDate DateTime?
@@ -126,19 +127,26 @@ model ComplaintReport {
   description          String             // Private by default
   resolutionOutcome    String?            // What outcome would resolve it
   approximateRegion    String?            // State/Region e.g. "Maharashtra", "Karnataka"
+  orderReference       String?            // Optional masked order reference
+  contactEmail         String?            // Optional private notification email
+  contactPhone         String?            // Optional private notification phone
   idempotencyKey       String?            @unique
   hasMeaningfulUpdate  Boolean            @default(false)
   
   isDemo               Boolean            @default(false)
+  isDeleted            Boolean            @default(false)
+  deletedAt            DateTime?
 
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
 
-  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   issue                Issue              @relation(fields: [issueId], references: [id], onDelete: Cascade)
   evidence             Evidence[]
 
   @@index([userId])
+  @@index([accessKeyHash])
+  @@index([isDeleted])
   @@index([issueId])
   @@index([verificationStatus])
   @@index([complaintStatus])

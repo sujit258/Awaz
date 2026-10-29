@@ -30,14 +30,26 @@ export async function GET(
 
     const stats = await getAggregateStats({ issueId: issue.id });
 
+    const isProduction = process.env.DEMO_MODE !== "true";
+
     const [firstReport, latestReport] = await Promise.all([
       prisma.complaintReport.findFirst({
-        where: { issueId: issue.id, verificationStatus: { not: "REJECTED" } },
+        where: {
+          issueId: issue.id,
+          isDeleted: false,
+          verificationStatus: { not: "REJECTED" },
+          ...(isProduction ? { isDemo: false } : {}),
+        },
         orderBy: { createdAt: "asc" },
         select: { createdAt: true },
       }),
       prisma.complaintReport.findFirst({
-        where: { issueId: issue.id, verificationStatus: { not: "REJECTED" } },
+        where: {
+          issueId: issue.id,
+          isDeleted: false,
+          verificationStatus: { not: "REJECTED" },
+          ...(isProduction ? { isDemo: false } : {}),
+        },
         orderBy: { createdAt: "desc" },
         select: { createdAt: true },
       }),
@@ -47,8 +59,10 @@ export async function GET(
       by: ["approximateRegion"],
       where: {
         issueId: issue.id,
+        isDeleted: false,
         verificationStatus: { not: "REJECTED" },
         approximateRegion: { not: null },
+        ...(isProduction ? { isDemo: false } : {}),
       },
       _count: { id: true },
       orderBy: { _count: { id: "desc" } },

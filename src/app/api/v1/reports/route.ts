@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { ComplaintSubmissionSchema } from "@/lib/validation/schemas";
 import { checkRateLimit } from "@/lib/antispam/rate-limit";
 import { detectPotentialDuplicate } from "@/lib/antispam/duplicates";
+import { generateAccessKey, hashAccessKey } from "@/lib/auth/access-key";
 
 // Generate unique, readable reference code e.g. "AWZ-2026-X89J"
 function generateReferenceNumber(): string {
@@ -19,18 +20,15 @@ function generateReferenceNumber(): string {
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Authentication required to submit a complaint report." },
-        { status: 401 }
-      );
-    }
+    const forwarded = req.headers.get("x-forwarded-for");
+    const clientIp = (forwarded ? forwarded.split(",")[0] : req.headers.get("x-real-ip"))?.trim() || "unknown";
 
-    // Rate limit: max 5 reports per user per 10 minutes
-    const rateCheck = checkRateLimit(`report:${user.id}`, 5, 600_000);
+    // Rate limiting: 5 reports per 10 minutes
+    const rateLimitKey = user ? `report:user:${user.id}` : `report:ip:${clientIp}`;
+    const rateCheck = checkRateLimit(rateLimitKey, 5, 600_000);
     if (!rateCheck.allowed) {
       return NextResponse.json(
-        { error: "Rate limit reached. Please wait before submitting additional reports." },
+        { error: "Submission rate limit reached. Please wait before submitting additional reports." },
         { status: 429 }
       );
     }
@@ -66,7 +64,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Verify issue exists
+    // Verify issue category exists
     const issue = await prisma.issue.findUnique({
       where: { id: data.issueId },
     });
@@ -74,31 +72,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Specified issue category not found." }, { status: 404 });
     }
 
-    // Check duplicate similarity
-    const duplicateCheck = await detectPotentialDuplicate(
-      user.id,
-      data.issueId,
-      data.summary,
-      data.description
-    );
+    // Generate safe summary if not provided (max 140 chars)
+    const effectiveSummary = data.summary && data.summary.trim().length > 0
+      ? data.summary.trim()
+      : data.description.substring(0, 120).trim();
 
-    // If exact duplicate by same user, return existing reference or inform them
-    if (duplicateCheck.isDuplicateBySameUser && duplicateCheck.suspectedDuplicateOfReportId) {
-      const existingReport = await prisma.complaintReport.findUnique({
-        where: { id: duplicateCheck.suspectedDuplicateOfReportId },
-      });
-      if (existingReport) {
-        return NextResponse.json({
-          success: true,
-          isDuplicate: true,
-          message: "A very similar report was recently submitted by your account.",
-          report: {
-            id: existingReport.id,
-            referenceNumber: existingReport.referenceNumber,
-            verificationStatus: existingReport.verificationStatus,
-            issueSlug: issue.slug,
-          },
+    // Check duplicate similarity for authenticated users
+    if (user) {
+      const duplicateCheck = await detectPotentialDuplicate(
+        user.id,
+        data.issueId,
+        effectiveSummary,
+        data.description
+      );
+
+      if (duplicateCheck.isDuplicateBySameUser && duplicateCheck.suspectedDuplicateOfReportId) {
+        const existingReport = await prisma.complaintReport.findUnique({
+          where: { id: duplicateCheck.suspectedDuplicateOfReportId },
         });
+        if (existingReport) {
+          return NextResponse.json({
+            success: true,
+            isDuplicate: true,
+            message: "A very similar report was recently submitted by your account.",
+            report: {
+              id: existingReport.id,
+              referenceNumber: existingReport.referenceNumber,
+              verificationStatus: existingReport.verificationStatus,
+              issueSlug: issue.slug,
+            },
+          });
+        }
       }
     }
 
@@ -110,40 +114,49 @@ export async function POST(req: NextRequest) {
       collision = await prisma.complaintReport.findUnique({ where: { referenceNumber } });
     }
 
-    const orderDate = data.orderDate ? new Date(data.orderDate) : null;
-    const promisedDeliveryDate = new Date(data.promisedDeliveryDate);
+    // Generate cryptographic access key for anonymous or offline tracking
+    const accessKey = generateAccessKey();
+    const accessKeyHash = hashAccessKey(accessKey);
 
-    // Create report
+    const orderDate = data.orderDate ? new Date(data.orderDate) : null;
+    const promisedDeliveryDate = data.promisedDeliveryDate ? new Date(data.promisedDeliveryDate) : null;
+
+    // Create report record
     const newReport = await prisma.complaintReport.create({
       data: {
         referenceNumber,
-        userId: user.id,
+        userId: user ? user.id : null,
+        accessKeyHash,
         issueId: issue.id,
         orderDate,
         promisedDeliveryDate,
-        orderStatus: data.orderStatus,
+        orderStatus: data.orderStatus || "AWAITING_DELIVERY",
         complaintStatus: "OPEN",
         verificationStatus: "UNVERIFIED",
-        summary: data.summary,
+        summary: effectiveSummary,
         description: data.description,
         resolutionOutcome: data.resolutionOutcome || null,
         approximateRegion: data.approximateRegion || null,
-        hasMeaningfulUpdate: data.hasMeaningfulUpdate,
+        orderReference: data.orderReference || null,
+        contactEmail: data.contactEmail || null,
+        contactPhone: data.contactPhone || null,
+        hasMeaningfulUpdate: data.hasMeaningfulUpdate || false,
         idempotencyKey: data.idempotencyKey || null,
         isDemo: process.env.DEMO_MODE === "true",
       },
     });
 
-    // Audit log
+    // Audit log (never log access key or full private description)
     await prisma.auditLog.create({
       data: {
-        actorId: user.id,
-        action: "CREATE_REPORT",
+        actorId: user ? user.id : null,
+        action: user ? "CREATE_REPORT" : "CREATE_ANONYMOUS_REPORT",
         targetType: "REPORT",
         targetId: newReport.id,
         metadata: JSON.stringify({
           referenceNumber: newReport.referenceNumber,
           issueSlug: issue.slug,
+          isAnonymous: !user,
         }),
       },
     });
@@ -159,7 +172,10 @@ export async function POST(req: NextRequest) {
         issueSlug: issue.slug,
         issueTitle: issue.title,
         createdAt: newReport.createdAt,
+        isAnonymous: !user,
       },
+      // Returned ONLY once upon creation so anonymous user can securely store it
+      accessKey,
     });
   } catch (error) {
     console.error("Create report error:", error);

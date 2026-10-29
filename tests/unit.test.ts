@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { calculateTextSimilarity } from "../src/lib/antispam/duplicates";
 import { checkRateLimit } from "../src/lib/antispam/rate-limit";
 import { ComplaintSubmissionSchema } from "../src/lib/validation/schemas";
+import { generateAccessKey, hashAccessKey, verifyAccessKey } from "../src/lib/auth/access-key";
+import { toPublicReportDTO } from "../src/lib/dto/report";
 
 test("calculateTextSimilarity returns 1.0 for identical sentences", () => {
   const textA = "My Flipkart order has been delayed for 4 days without tracking updates.";
@@ -44,13 +46,28 @@ test("checkRateLimit permits requests below threshold and blocks excess", () => 
   assert.equal(r4.remaining, 0);
 });
 
-test("ComplaintSubmissionSchema rejects submissions without promised delivery date", () => {
+test("ComplaintSubmissionSchema accepts anonymous submission without email, phone, or promised date", () => {
+  const validAnonymousPayload = {
+    issueId: "123e4567-e89b-12d3-a456-426614174000",
+    companyId: "flipkart",
+    description: "My order has been delayed for five days at the local hub with no status update.",
+    confirmationAccurate: true,
+    confirmationConsent: true,
+  };
+
+  const result = ComplaintSubmissionSchema.safeParse(validAnonymousPayload);
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.orderStatus, "AWAITING_DELIVERY");
+    assert.equal(result.data.contactEmail, undefined);
+  }
+});
+
+test("ComplaintSubmissionSchema rejects descriptions under 20 characters", () => {
   const invalidPayload = {
     issueId: "123e4567-e89b-12d3-a456-426614174000",
     companyId: "flipkart",
-    promisedDeliveryDate: "",
-    summary: "Order is delayed by three days",
-    description: "Detailed description of the issue occurring at the local courier hub.",
+    description: "Too short", // Less than 20 chars
     confirmationAccurate: true,
     confirmationConsent: true,
   };
@@ -63,8 +80,6 @@ test("ComplaintSubmissionSchema rejects unconfirmed accuracy or consent", () => 
   const invalidPayload = {
     issueId: "123e4567-e89b-12d3-a456-426614174000",
     companyId: "flipkart",
-    promisedDeliveryDate: "2026-10-25",
-    summary: "Order delayed by 3 days at warehouse",
     description: "The package was scheduled for delivery on the 25th but no update has occurred.",
     confirmationAccurate: false, // Must be true
     confirmationConsent: true,
@@ -74,18 +89,65 @@ test("ComplaintSubmissionSchema rejects unconfirmed accuracy or consent", () => 
   assert.equal(result.success, false);
 });
 
-test("ComplaintSubmissionSchema accepts valid compliant payload", () => {
-  const validPayload = {
-    issueId: "123e4567-e89b-12d3-a456-426614174000",
-    companyId: "flipkart",
-    promisedDeliveryDate: "2026-10-25",
-    summary: "Order delayed by 3 days with no tracking updates",
-    description: "The package was scheduled for delivery on the 25th but has remained at hub without movement.",
+test("Access key generation, cryptographic hashing, and constant-time verification work", () => {
+  const key = generateAccessKey();
+  assert.ok(key.startsWith("awaz_ak_"));
+  assert.ok(key.length >= 40);
+
+  const hash = hashAccessKey(key);
+  assert.equal(hash.length, 64); // SHA-256 hex length
+  assert.notEqual(key, hash);
+
+  // Correct key verifies
+  const isValid = verifyAccessKey(key, hash);
+  assert.equal(isValid, true);
+
+  // Incorrect or tampered key fails
+  const isInvalid = verifyAccessKey("awaz_ak_tampered_key_with_wrong_entropy", hash);
+  assert.equal(isInvalid, false);
+
+  // Null/empty checks
+  assert.equal(verifyAccessKey("", hash), false);
+  assert.equal(verifyAccessKey(key, null), false);
+});
+
+test("toPublicReportDTO excludes private description, accessKeyHash, and contact details", () => {
+  const rawReport = {
+    id: "internal-uuid-1234",
+    referenceNumber: "AWZ-2026-X89J",
+    userId: "secret-user-id",
+    accessKeyHash: "f6c59d997a3898bd03f9c642642a8b98",
+    contactEmail: "citizen@example.com",
+    contactPhone: "+919876543210",
+    description: "Private sensitive description containing potential identifying details.",
+    summary: "Order delayed at hub",
     orderStatus: "AWAITING_DELIVERY",
-    confirmationAccurate: true,
-    confirmationConsent: true,
+    complaintStatus: "OPEN",
+    verificationStatus: "UNVERIFIED",
+    approximateRegion: "Maharashtra",
+    createdAt: new Date("2026-10-29T10:00:00Z"),
+    hasMeaningfulUpdate: false,
+    issue: {
+      slug: "flipkart-delayed-delivery",
+      title: "Delayed Delivery Beyond Promised Date",
+    },
+    evidence: [{ id: "ev-1" }],
   };
 
-  const result = ComplaintSubmissionSchema.safeParse(validPayload);
-  assert.equal(result.success, true);
+  const publicDTO = toPublicReportDTO(rawReport);
+
+  // Public fields present
+  assert.equal(publicDTO.referenceNumber, "AWZ-2026-X89J");
+  assert.equal(publicDTO.issueSlug, "flipkart-delayed-delivery");
+  assert.equal(publicDTO.verificationStatus, "UNVERIFIED");
+  assert.equal(publicDTO.evidenceCount, 1);
+
+  // Private fields strictly excluded
+  const rawObj = publicDTO as unknown as Record<string, unknown>;
+  assert.equal(rawObj.description, undefined);
+  assert.equal(rawObj.userId, undefined);
+  assert.equal(rawObj.accessKeyHash, undefined);
+  assert.equal(rawObj.contactEmail, undefined);
+  assert.equal(rawObj.contactPhone, undefined);
+  assert.equal(rawObj.id, undefined);
 });
