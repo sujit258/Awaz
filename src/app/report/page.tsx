@@ -51,6 +51,7 @@ export default function ReportPage() {
     fileType: string;
     fileSize: number;
   } | null>(null);
+  const [selectedRawFile, setSelectedRawFile] = useState<File | null>(null);
   const [redactionConfirmed, setRedactionConfirmed] = useState(false);
 
   // Consent & Legal
@@ -147,12 +148,13 @@ export default function ReportPage() {
       return;
     }
 
-    const validTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    const validTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf"];
     if (!validTypes.includes(file.type)) {
-      alert("Please upload a JPEG, PNG, WEBP image or a PDF document.");
+      alert("Please upload a JPEG, PNG, WEBP, HEIC image or a PDF document.");
       return;
     }
 
+    setSelectedRawFile(file);
     setEvidenceFile({
       fileName: file.name,
       fileType: file.type,
@@ -206,7 +208,7 @@ export default function ReportPage() {
             evidenceHeaders["x-awaz-access-key"] = data.accessKey;
           }
 
-          await fetch(`/api/v1/reports/${data.report.id}/evidence`, {
+          const evRes = await fetch(`/api/v1/reports/${data.report.id}/evidence`, {
             method: "POST",
             headers: evidenceHeaders,
             body: JSON.stringify({
@@ -216,8 +218,23 @@ export default function ReportPage() {
               redactionConfirmed,
             }),
           });
+
+          if (evRes.ok) {
+            const evData = await evRes.json();
+            // If server returned a presigned upload URL and we have the raw file bytes, upload directly to R2
+            if (evData.uploadUrl && selectedRawFile) {
+              await fetch(evData.uploadUrl, {
+                method: "PUT",
+                headers: {
+                  "Content-Type": selectedRawFile.type,
+                },
+                body: selectedRawFile,
+              });
+            }
+          }
         } catch (evErr) {
           console.error("Evidence attachment error:", evErr);
+          // Note: Complaint submission itself succeeded; don't block citizen progress
         }
       }
 
@@ -592,14 +609,14 @@ export default function ReportPage() {
               <input
                 type="file"
                 id="evidence-input"
-                accept=".jpg,.jpeg,.png,.webp,.pdf"
+                accept=".jpg,.jpeg,.png,.webp,.heic,.pdf"
                 onChange={handleFileSelection}
                 className="hidden"
               />
               <label htmlFor="evidence-input" className="cursor-pointer flex flex-col items-center">
                 <Upload className="h-8 w-8 text-[#5B6573] mb-2" />
                 <span className="text-sm font-semibold text-[#2457D6]">
-                  Click to select file (PNG, JPG, WEBP, PDF up to 10MB)
+                  Click to select file (PNG, JPG, WEBP, HEIC, PDF up to 10MB)
                 </span>
                 <span className="text-xs text-[#5B6573] mt-1">
                   Order tracking screenshot, delayed notification, or support chat
@@ -614,7 +631,10 @@ export default function ReportPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setEvidenceFile(null)}
+                    onClick={() => {
+                      setEvidenceFile(null);
+                      setSelectedRawFile(null);
+                    }}
                     className="ml-2 text-xs underline text-[#B42318]"
                   >
                     Remove

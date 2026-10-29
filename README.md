@@ -128,6 +128,35 @@ Visit [http://localhost:3000](http://localhost:3000) to view the live dashboard.
 
 ---
 
+## 🪣 Cloudflare R2 Evidence Storage Architecture
+
+Awaz integrates with a private Cloudflare R2 bucket (`awaz`) using the AWS SDK for JavaScript S3-compatible client (`@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`) with region `auto`.
+
+### Security & Privacy Guarantees
+1. **Private Bucket Access Only:** The R2 bucket is strictly private. Public bucket access and raw object URLs are never enabled or exposed.
+2. **Short-Lived Authorized Presigned URLs:**
+   - **Uploads:** Direct-to-R2 upload via 5-minute presigned `PUT` URLs generated server-side.
+   - **Downloads:** Protected access via 15-minute presigned `GET` URLs generated only after server-side session or report access-key verification.
+3. **No File Bytes in PostgreSQL:** The database stores strictly evidence metadata (`storageKey`, `fileName`, `fileType`, `fileSize`, `reviewStatus`, `redactionStatus`).
+4. **Cryptographically Unpredictable Keys:** Object keys follow the pattern `evidence/<reportId>/<uuid>-<timestamp>.<ext>` to prevent path traversal, collisions, or object enumeration.
+5. **Format & Size Validation:** Permitted formats: JPEG, PNG, WEBP, HEIC, and PDF. Maximum size: 10MB.
+6. **Graceful Degraded Mode:** If R2 environment variables are absent, evidence uploads are safely paused with HTTP 503 while text-only complaint submission continues working 100%.
+7. **Safe Deletion & Purge:** When a report is withdrawn or deleted, associated R2 objects are purged with retry logic and audited to `AuditLog`.
+
+### Environment Variables
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `R2_BUCKET` | Config | `awaz` | Cloudflare R2 private bucket name |
+| `R2_ENDPOINT` | Config | — | S3 API endpoint URL (e.g. `https://<account_id>.r2.cloudflarestorage.com`) |
+| `R2_ACCESS_KEY_ID` | **Secret** | — | Cloudflare R2 S3-compatible Access Key ID |
+| `R2_SECRET_ACCESS_KEY` | **Secret** | — | Cloudflare R2 S3-compatible Secret Access Key |
+| `R2_REGION` | Config | `auto` | Cloudflare R2 region (must be `auto`) |
+
+*(Legacy `S3_*` variable aliases remain supported for backward compatibility.)*
+
+---
+
 ## 🧪 Testing & Quality Checks
 
 Run the automated test suite, type checker, linter, and production build:

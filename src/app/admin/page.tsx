@@ -11,6 +11,7 @@ import {
   Eye,
   AlertTriangle,
   ArrowRight,
+  ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -523,6 +524,16 @@ export default function AdminDashboardPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        <a
+                          href={`/api/v1/evidence/${ev.id}?download=true`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#F7F8FA] text-[#17212F] border border-[#E1E5EB] hover:bg-[#EAECEF] font-semibold text-[10px]"
+                          title="Download authorized evidence file"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          <span>View File</span>
+                        </a>
                         <button
                           disabled={actionLoading}
                           onClick={() => handleVerificationReview("VERIFIED", ev.id)}

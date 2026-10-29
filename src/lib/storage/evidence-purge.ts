@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { getR2Config, deleteObjectFromR2 } from "@/lib/storage/r2";
 
 export interface StorageConfig {
   isConfigured: boolean;
@@ -11,16 +12,11 @@ export interface StorageConfig {
  * is fully and securely configured in environment variables.
  */
 export function getStorageConfig(): StorageConfig {
-  const bucket = process.env.S3_BUCKET;
-  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
-  const endpoint = process.env.S3_ENDPOINT;
-
-  const isConfigured = Boolean(bucket && accessKeyId && secretAccessKey);
+  const config = getR2Config();
   return {
-    isConfigured,
-    bucket: bucket || undefined,
-    endpoint: endpoint || undefined,
+    isConfigured: config.isConfigured,
+    bucket: config.bucket,
+    endpoint: config.endpoint,
   };
 }
 
@@ -31,7 +27,7 @@ async function deleteObjectWithRetry(
   storageKey: string,
   maxRetries = 3
 ): Promise<{ success: boolean; attempts: number; error?: string }> {
-  const config = getStorageConfig();
+  const config = getR2Config();
 
   // If storage is not configured (e.g. metadata-only local beta), mark as clean
   if (!config.isConfigured) {
@@ -44,15 +40,16 @@ async function deleteObjectWithRetry(
   while (attempt < maxRetries) {
     attempt++;
     try {
-      // In production S3/R2 integration, perform HTTP DELETE with AWS Signature v4
-      // For now, if endpoint/bucket is set, simulate / execute deletion request
-      const success = true; // placeholder for S3 REST DELETE
-      if (success) {
+      const result = await deleteObjectFromR2(storageKey);
+      if (result.success) {
         return { success: true, attempts: attempt };
       }
+      lastError = result.error || "R2 object deletion failed";
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : String(err);
-      // Wait with backoff before next attempt
+    }
+    // Wait with exponential backoff before next attempt
+    if (attempt < maxRetries) {
       await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempt)));
     }
   }
