@@ -5,6 +5,7 @@ import { ComplaintSubmissionSchema } from "@/lib/validation/schemas";
 import { checkRateLimit } from "@/lib/antispam/rate-limit";
 import { detectPotentialDuplicate } from "@/lib/antispam/duplicates";
 import { generateAccessKey, hashAccessKey } from "@/lib/auth/access-key";
+import { getTrustedClientIp } from "@/lib/antispam/ip";
 
 // Generate unique, readable reference code e.g. "AWZ-2026-X89J"
 function generateReferenceNumber(): string {
@@ -20,8 +21,7 @@ function generateReferenceNumber(): string {
 export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser();
-    const forwarded = req.headers.get("x-forwarded-for");
-    const clientIp = (forwarded ? forwarded.split(",")[0] : req.headers.get("x-real-ip"))?.trim() || "unknown";
+    const clientIp = getTrustedClientIp(req);
 
     // Rate limiting: 5 reports per 10 minutes
     const rateLimitKey = user ? `report:user:${user.id}` : `report:ip:${clientIp}`;

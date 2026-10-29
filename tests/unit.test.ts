@@ -151,3 +151,44 @@ test("toPublicReportDTO excludes private description, accessKeyHash, and contact
   assert.equal(rawObj.contactPhone, undefined);
   assert.equal(rawObj.id, undefined);
 });
+
+test("getTrustedClientIp prioritizes x-vercel-ip over client-supplied x-forwarded-for", async () => {
+  const { getTrustedClientIp } = await import("../src/lib/antispam/ip");
+  const { NextRequest } = await import("next/server");
+
+  // Case 1: Attacker sends spoofed x-forwarded-for, but Vercel sets x-vercel-ip
+  const reqWithVercel = new NextRequest("http://localhost:3000/api/v1/reports", {
+    headers: {
+      "x-forwarded-for": "1.1.1.1, 10.0.0.1",
+      "x-vercel-ip": "76.76.21.21",
+    },
+  });
+  assert.equal(getTrustedClientIp(reqWithVercel), "76.76.21.21");
+
+  // Case 2: Cloudflare edge header
+  const reqWithCf = new NextRequest("http://localhost:3000/api/v1/reports", {
+    headers: {
+      "x-forwarded-for": "2.2.2.2",
+      "cf-connecting-ip": "104.16.249.249",
+    },
+  });
+  // Without vercel or real-ip, cf-connecting-ip is used
+  assert.equal(getTrustedClientIp(reqWithCf), "104.16.249.249");
+
+  // Case 3: Fallback to localhost when no proxy headers exist
+  const reqClean = new NextRequest("http://localhost:3000/api/v1/reports");
+  assert.equal(getTrustedClientIp(reqClean), "127.0.0.1");
+});
+
+test("getStorageConfig safely detects unconfigured production object storage", async () => {
+  const { getStorageConfig } = await import("../src/lib/storage/evidence-purge");
+  const config = getStorageConfig();
+
+  // If S3 environment variables are not set in test environment, it must report isConfigured: false
+  if (!process.env.S3_BUCKET || !process.env.S3_ACCESS_KEY_ID || !process.env.S3_SECRET_ACCESS_KEY) {
+    assert.equal(config.isConfigured, false);
+  } else {
+    assert.equal(config.isConfigured, true);
+  }
+});
+

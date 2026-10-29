@@ -3,10 +3,11 @@ import { prisma } from "@/lib/db/prisma";
 import { LoginSchema } from "@/lib/validation/schemas";
 import { comparePassword, createSessionToken, COOKIE_NAME } from "@/lib/auth/session";
 import { checkRateLimit } from "@/lib/antispam/rate-limit";
+import { getTrustedClientIp } from "@/lib/antispam/ip";
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = req.headers.get("x-forwarded-for") || "unknown";
+    const ip = getTrustedClientIp(req);
     const rateCheck = checkRateLimit(`login:${ip}`, 10, 60_000);
     if (!rateCheck.allowed) {
       return NextResponse.json(
