@@ -94,20 +94,7 @@ export default function RootLayout({
         </Suspense>
         <main className="flex-1">{children}</main>
         <Footer />
-        <Analytics
-          beforeSend={(event) => {
-            // Strip any query strings to safeguard consumer report privacy
-            if (event.url.includes("?")) {
-              try {
-                const parsed = new URL(event.url, "https://awaz.suvidhatools.in");
-                return { ...event, url: parsed.pathname };
-              } catch {
-                return event;
-              }
-            }
-            return event;
-          }}
-        />
+        <Analytics />
       </body>
     </html>
   );

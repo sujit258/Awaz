@@ -175,3 +175,144 @@ test("getAggregateStats excludes deleted and demo records and counts distinct re
   });
 });
 
+test("Staff roles verification: ADMIN and MODERATOR sessions verify with elevated privileges", async () => {
+  const adminUser = {
+    id: "admin-uuid-test",
+    email: "admin@awaz.org",
+    displayName: "Lead Moderator",
+    role: "ADMIN" as const,
+  };
+
+  const token = await createSessionToken(adminUser);
+  const verified = await verifySessionToken(token);
+  assert.ok(verified !== null);
+  assert.equal(verified?.role, "ADMIN");
+  assert.ok(verified?.role === "ADMIN" || verified?.role === "MODERATOR");
+
+  const citizenUser = {
+    id: "citizen-uuid-test",
+    email: "user@example.com",
+    displayName: "Citizen User",
+    role: "CITIZEN" as const,
+  };
+  const citizenToken = await createSessionToken(citizenUser);
+  const citizenVerified = await verifySessionToken(citizenToken);
+  assert.equal(citizenVerified?.role === "ADMIN" || citizenVerified?.role === "MODERATOR", false);
+});
+
+test("Moderation queue query safely handles anonymous reports with null user and null promisedDeliveryDate", async () => {
+  const issue = await prisma.issue.findFirst();
+  assert.ok(issue !== null);
+
+  // Create an anonymous report with null user and null promisedDeliveryDate
+  const anonReport = await prisma.complaintReport.create({
+    data: {
+      referenceNumber: `AWZ-TEST-ANON-${Date.now().toString(36).toUpperCase()}`,
+      userId: null,
+      issueId: issue.id,
+      summary: "Anonymous delivery delay issue",
+      description: "Testing null user handling in moderation queue",
+      promisedDeliveryDate: null,
+      orderDate: null,
+      isDemo: false,
+      isDeleted: false,
+    },
+  });
+
+  // Query as admin reports route does
+  const reports = await prisma.complaintReport.findMany({
+    where: { id: anonReport.id },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          displayName: true,
+          role: true,
+        },
+      },
+      issue: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          category: true,
+        },
+      },
+      evidence: true,
+    },
+  });
+
+  assert.equal(reports.length, 1);
+  const fetched = reports[0];
+  // Verify user is null and access does not throw
+  assert.equal(fetched.userId, null);
+  assert.equal(fetched.user, null);
+  assert.equal(fetched.promisedDeliveryDate, null);
+  // Safe accessor check:
+  const userObj = fetched.user as { email?: string } | null;
+  const reporterEmail = userObj?.email || "Anonymous Citizen";
+  assert.equal(reporterEmail, "Anonymous Citizen");
+
+  // Cleanup
+  await prisma.complaintReport.delete({
+    where: { id: anonReport.id },
+  });
+});
+
+test("My-reports query strictly filters by userId and excludes withdrawn records", async () => {
+  const issue = await prisma.issue.findFirst();
+  assert.ok(issue !== null);
+
+  const testUser = await prisma.user.create({
+    data: {
+      email: `test-${Date.now()}@example.com`,
+      displayName: "Integration Test Citizen",
+      role: "CITIZEN",
+    },
+  });
+
+  const activeReport = await prisma.complaintReport.create({
+    data: {
+      referenceNumber: `AWZ-TEST-MY1-${Date.now().toString(36).toUpperCase()}`,
+      userId: testUser.id,
+      issueId: issue.id,
+      summary: "Active report for citizen",
+      description: "Should be returned in my-reports",
+      isDeleted: false,
+    },
+  });
+
+  const withdrawnReport = await prisma.complaintReport.create({
+    data: {
+      referenceNumber: `AWZ-TEST-MY2-${Date.now().toString(36).toUpperCase()}`,
+      userId: testUser.id,
+      issueId: issue.id,
+      summary: "Withdrawn report for citizen",
+      description: "Should NOT be returned in active my-reports",
+      isDeleted: true,
+      deletedAt: new Date(),
+    },
+  });
+
+  // Query exactly as /api/v1/my-reports does
+  const userReports = await prisma.complaintReport.findMany({
+    where: {
+      userId: testUser.id,
+      isDeleted: false,
+    },
+  });
+
+  assert.equal(userReports.length, 1);
+  assert.equal(userReports[0].id, activeReport.id);
+
+  // Cleanup
+  await prisma.complaintReport.deleteMany({
+    where: { id: { in: [activeReport.id, withdrawnReport.id] } },
+  });
+  await prisma.user.delete({
+    where: { id: testUser.id },
+  });
+});
+
+

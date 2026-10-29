@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
     const issueId = searchParams.get("issueId");
     const search = searchParams.get("q");
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = {
+      isDemo: false,
+    };
 
     if (verificationStatus && verificationStatus !== "ALL") {
       where.verificationStatus = verificationStatus;
