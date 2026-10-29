@@ -1,9 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, User as UserIcon, LogOut, ChevronRight } from "lucide-react";
+import {
+  Menu,
+  X,
+  LogOut,
+  ChevronDown,
+  ArrowRight,
+  Shield,
+  Search,
+  FileText,
+  BarChart2,
+} from "lucide-react";
 import AwazLogo from "@/components/brand/AwazLogo";
 
 interface SessionUser {
@@ -15,10 +25,12 @@ interface SessionUser {
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function checkAuth() {
@@ -29,12 +41,32 @@ export default function Navbar() {
           setUser(data.user);
         }
       } catch {
-        // Not authenticated
+        // Unauthenticated
       } finally {
         setLoading(false);
       }
     }
     checkAuth();
+  }, [pathname]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setResourcesOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Synchronize menu state on navigation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMobileMenuOpen(false);
+      setResourcesOpen(false);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [pathname]);
 
   async function handleLogout() {
@@ -44,83 +76,170 @@ export default function Navbar() {
       router.push("/");
       router.refresh();
     } catch {
-      // Ignored
+      // Ignore
     }
   }
 
-  const navLinks = [
-    { href: "/", label: "Dashboard" },
-    { href: "/issues", label: "Explore Issues" },
-    { href: "/track", label: "Track Report" },
-    { href: "/methodology", label: "Methodology" },
-    { href: "/about", label: "How It Works" },
-  ];
+  const isStaff = user && (user.role === "ADMIN" || user.role === "MODERATOR");
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[#E1E5EB] bg-white/95 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-[#E1E5EB] bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Brand */}
+        {/* Brand Lockup */}
         <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center focus:outline-none" aria-label="Awaz - Public Consumer Evidence">
-            {/* Desktop: Full brand lockup */}
-            <AwazLogo variant="full" size={38} className="hidden sm:block" />
-            {/* Mobile: Compact icon + brand mark */}
-            <div className="flex sm:hidden items-center gap-2">
-              <AwazLogo variant="icon" size={32} />
-              <span className="text-xl font-extrabold tracking-tight text-[#17212F]">Awaz</span>
+          <Link
+            href="/"
+            className="flex items-center gap-2.5 focus:outline-none group"
+            aria-label="Awaz - Independent Consumer Evidence Platform"
+          >
+            <AwazLogo variant="icon" size={32} />
+            <div className="flex flex-col">
+              <span className="text-lg font-black tracking-tight text-[#17212F] group-hover:text-[#2457D6] transition-colors leading-none">
+                Awaz<span className="text-[#2457D6]">.</span>
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[#5B6573] mt-0.5 hidden sm:inline-block">
+                Consumer Evidence
+              </span>
             </div>
           </Link>
 
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-6">
-            {navLinks.map((link) => {
-              const isActive = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`text-sm font-medium transition-colors ${
-                    isActive
-                      ? "text-[#2457D6] font-semibold"
-                      : "text-[#5B6573] hover:text-[#172B4D]"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-            {user && (user.role === "ADMIN" || user.role === "MODERATOR") && (
-              <Link
-                href="/admin"
-                className={`text-sm font-medium transition-colors ${
-                  pathname.startsWith("/admin")
-                    ? "text-[#087E8B] font-semibold"
-                    : "text-[#087E8B] hover:text-[#065A63]"
+          {/* Desktop Primary Navigation */}
+          <nav className="hidden md:flex items-center gap-1">
+            <Link
+              href="/"
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                pathname === "/"
+                  ? "bg-[#EFF4FF] text-[#2457D6]"
+                  : "text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA]"
+              }`}
+            >
+              Overview
+            </Link>
+
+            <Link
+              href="/issues"
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                pathname === "/issues" || pathname.startsWith("/issues/")
+                  ? "bg-[#EFF4FF] text-[#2457D6]"
+                  : "text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA]"
+              }`}
+            >
+              Explore Issues
+            </Link>
+
+            {/* Secondary Resources Dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setResourcesOpen(!resourcesOpen)}
+                aria-expanded={resourcesOpen}
+                aria-haspopup="true"
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                  resourcesOpen || pathname === "/methodology" || pathname === "/about" || pathname === "/track"
+                    ? "text-[#17212F] bg-[#F7F8FA]"
+                    : "text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA]"
                 }`}
               >
-                Moderation Queue
+                <span>Trust &amp; Tools</span>
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${resourcesOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {resourcesOpen && (
+                <div className="absolute left-0 mt-2 w-72 rounded-xl border border-[#E1E5EB] bg-white p-2 shadow-xl ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-100 z-50">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#5B6573] px-3 py-1.5">
+                    Citizen Services
+                  </div>
+                  <Link
+                    href="/track"
+                    className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-[#F7F8FA] transition-colors group"
+                  >
+                    <Search className="h-4 w-4 text-[#2457D6] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-xs font-semibold text-[#17212F] group-hover:text-[#2457D6] block">
+                        Track a Report
+                      </span>
+                      <span className="text-[11px] text-[#5B6573] leading-snug block">
+                        Look up anonymous complaint progress with access key
+                      </span>
+                    </div>
+                  </Link>
+
+                  <div className="my-1 border-t border-[#E1E5EB]"></div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-[#5B6573] px-3 py-1.5">
+                    Standards &amp; Mission
+                  </div>
+
+                  <Link
+                    href="/methodology"
+                    className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-[#F7F8FA] transition-colors group"
+                  >
+                    <BarChart2 className="h-4 w-4 text-[#087E8B] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-xs font-semibold text-[#17212F] group-hover:text-[#087E8B] block">
+                        Counting Methodology
+                      </span>
+                      <span className="text-[11px] text-[#5B6573] leading-snug block">
+                        Deduplication, verification standards, and SLAs
+                      </span>
+                    </div>
+                  </Link>
+
+                  <Link
+                    href="/about"
+                    className="flex items-start gap-2.5 p-2.5 rounded-lg hover:bg-[#F7F8FA] transition-colors group"
+                  >
+                    <Shield className="h-4 w-4 text-[#18794E] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="text-xs font-semibold text-[#17212F] group-hover:text-[#18794E] block">
+                        Independence Charter
+                      </span>
+                      <span className="text-[11px] text-[#5B6573] leading-snug block">
+                        Non-governmental public interest platform principles
+                      </span>
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* Restricted Moderation Queue for Staff */}
+            {isStaff && (
+              <Link
+                href="/admin"
+                className={`ml-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  pathname.startsWith("/admin")
+                    ? "bg-[#087E8B] text-white"
+                    : "bg-[#EDF7F1] text-[#087E8B] hover:bg-[#D7EFE6] border border-[#087E8B]/20"
+                }`}
+              >
+                <Shield className="h-3.5 w-3.5" />
+                <span>Moderation Queue</span>
               </Link>
             )}
           </nav>
         </div>
 
-        {/* Right CTA & Account */}
+        {/* Right CTA & Account Area */}
         <div className="hidden md:flex items-center gap-3">
           {!loading && (
             <>
               {user ? (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <Link
                     href="/my-reports"
-                    className="flex items-center gap-1.5 text-sm font-medium text-[#172B4D] hover:text-[#2457D6] px-3 py-1.5 rounded-md hover:bg-[#F7F8FA] border border-transparent hover:border-[#E1E5EB]"
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border transition-colors ${
+                      pathname === "/my-reports"
+                        ? "bg-[#EFF4FF] border-[#2457D6]/30 text-[#2457D6]"
+                        : "border-[#E1E5EB] bg-white text-[#17212F] hover:bg-[#F7F8FA]"
+                    }`}
                   >
-                    <UserIcon className="h-4 w-4 text-[#5B6573]" />
+                    <FileText className="h-3.5 w-3.5 text-[#5B6573]" />
                     <span>My Reports</span>
                   </Link>
                   <button
                     onClick={handleLogout}
-                    className="p-1.5 text-[#5B6573] hover:text-[#B42318] rounded-md hover:bg-[#FEF3F2]"
+                    className="p-2 text-[#5B6573] hover:text-[#B42318] rounded-lg hover:bg-[#FEF3F2] transition-colors"
                     title="Sign Out"
+                    aria-label="Sign Out"
                   >
                     <LogOut className="h-4 w-4" />
                   </button>
@@ -128,7 +247,7 @@ export default function Navbar() {
               ) : (
                 <Link
                   href="/login"
-                  className="text-sm font-medium text-[#172B4D] hover:text-[#2457D6] px-3 py-1.5 rounded-md hover:bg-[#F7F8FA]"
+                  className="text-xs font-semibold text-[#5B6573] hover:text-[#17212F] px-3 py-2 rounded-lg hover:bg-[#F7F8FA] transition-colors"
                 >
                   Sign In
                 </Link>
@@ -136,96 +255,122 @@ export default function Navbar() {
             </>
           )}
 
+          {/* Primary Action Button */}
           <Link
             href="/report"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2457D6] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#1B44AA] transition-colors focus:ring-2 focus:ring-[#2457D6] focus:ring-offset-2"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-[#1B44AA] transition-all hover:shadow-md focus:ring-2 focus:ring-[#2457D6] focus:ring-offset-2"
           >
             <span>Report an Issue</span>
-            <ChevronRight className="h-4 w-4" />
+            <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
 
-        {/* Mobile menu button */}
+        {/* Mobile Navigation Toggle */}
         <div className="flex md:hidden items-center gap-2">
           <Link
             href="/report"
-            className="rounded-lg bg-[#2457D6] px-3 py-1.5 text-xs font-semibold text-white shadow-sm"
+            className="inline-flex items-center rounded-lg bg-[#2457D6] px-3 py-1.5 text-xs font-bold text-white shadow-xs"
           >
             Report
           </Link>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-[#5B6573] hover:text-[#172B4D] rounded-md hover:bg-[#F7F8FA]"
+            className="p-2 text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA] rounded-lg transition-colors"
             aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
           >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer / Flyout */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-b border-[#E1E5EB] bg-white px-4 pt-2 pb-6 space-y-3">
-          <nav className="flex flex-col space-y-2">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className={`px-3 py-2 text-sm font-medium rounded-md ${
-                  pathname === link.href
-                    ? "bg-[#F7F8FA] text-[#2457D6] font-semibold"
-                    : "text-[#5B6573] hover:bg-[#F7F8FA]"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-            {user && (user.role === "ADMIN" || user.role === "MODERATOR") && (
+        <div className="md:hidden border-b border-[#E1E5EB] bg-white px-4 pt-3 pb-6 space-y-4 animate-in slide-in-from-top-2 duration-150 shadow-lg">
+          <div className="space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#5B6573] block px-3 py-1">
+              Primary Destinations
+            </span>
+            <Link
+              href="/"
+              className={`block px-3 py-2 rounded-lg text-sm font-semibold ${
+                pathname === "/" ? "bg-[#EFF4FF] text-[#2457D6]" : "text-[#17212F] hover:bg-[#F7F8FA]"
+              }`}
+            >
+              Overview
+            </Link>
+            <Link
+              href="/issues"
+              className={`block px-3 py-2 rounded-lg text-sm font-semibold ${
+                pathname.startsWith("/issues") ? "bg-[#EFF4FF] text-[#2457D6]" : "text-[#17212F] hover:bg-[#F7F8FA]"
+              }`}
+            >
+              Explore Issues
+            </Link>
+            <Link
+              href="/track"
+              className={`block px-3 py-2 rounded-lg text-sm font-semibold ${
+                pathname === "/track" ? "bg-[#EFF4FF] text-[#2457D6]" : "text-[#17212F] hover:bg-[#F7F8FA]"
+              }`}
+            >
+              Track a Report
+            </Link>
+          </div>
+
+          <div className="border-t border-[#E1E5EB] pt-3 space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#5B6573] block px-3 py-1">
+              Trust &amp; Standards
+            </span>
+            <Link
+              href="/methodology"
+              className="block px-3 py-2 rounded-lg text-sm font-medium text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA]"
+            >
+              Counting Methodology
+            </Link>
+            <Link
+              href="/about"
+              className="block px-3 py-2 rounded-lg text-sm font-medium text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA]"
+            >
+              Independence Charter
+            </Link>
+            <Link
+              href="/privacy"
+              className="block px-3 py-2 rounded-lg text-sm font-medium text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA]"
+            >
+              Privacy Notice
+            </Link>
+          </div>
+
+          {isStaff && (
+            <div className="border-t border-[#E1E5EB] pt-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#087E8B] block px-3 py-1">
+                Authorized Staff
+              </span>
               <Link
                 href="/admin"
-                onClick={() => setMobileMenuOpen(false)}
-                className="px-3 py-2 text-sm font-medium text-[#087E8B] rounded-md hover:bg-[#F7F8FA]"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold bg-[#EDF7F1] text-[#087E8B]"
               >
-                Moderation Queue
+                <Shield className="h-4 w-4" />
+                <span>Moderation Queue</span>
               </Link>
-            )}
-            {user && (
-              <Link
-                href="/my-reports"
-                onClick={() => setMobileMenuOpen(false)}
-                className="px-3 py-2 text-sm font-medium text-[#172B4D] rounded-md hover:bg-[#F7F8FA]"
-              >
-                My Reports ({user.displayName || user.email})
-              </Link>
-            )}
-          </nav>
+            </div>
+          )}
 
-          <div className="pt-3 border-t border-[#E1E5EB] flex items-center justify-between">
+          <div className="border-t border-[#E1E5EB] pt-3 flex items-center justify-between px-3">
             {user ? (
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 text-sm font-medium text-[#B42318] py-1.5"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </button>
+              <div className="flex items-center justify-between w-full">
+                <Link href="/my-reports" className="text-xs font-semibold text-[#2457D6]">
+                  My Reports ({user.email})
+                </Link>
+                <button onClick={handleLogout} className="text-xs font-semibold text-[#B42318]">
+                  Sign Out
+                </button>
+              </div>
             ) : (
-              <Link
-                href="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-sm font-medium text-[#2457D6] py-1.5"
-              >
-                Sign In
+              <Link href="/login" className="text-xs font-semibold text-[#2457D6]">
+                Citizen Sign In / Register
               </Link>
             )}
-            <Link
-              href="/report"
-              onClick={() => setMobileMenuOpen(false)}
-              className="rounded-lg bg-[#2457D6] px-4 py-2 text-sm font-semibold text-white shadow-sm"
-            >
-              Report an Issue
-            </Link>
           </div>
         </div>
       )}

@@ -4,10 +4,6 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  FileText,
-  Users,
-  ShieldCheck,
-  CheckCircle2,
   Calendar,
   Download,
   Share2,
@@ -69,6 +65,7 @@ function IssueDetailContent() {
   const [latestReportDate, setLatestReportDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -103,214 +100,244 @@ function IssueDetailContent() {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert("Page link copied to clipboard!");
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
     }
   }
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-16 text-center text-sm text-[#5B6573] animate-pulse">
-        Loading public issue evidence registry...
+      <div className="mx-auto max-w-7xl px-4 py-20 text-center text-sm text-[#5B6573] animate-pulse">
+        Retrieving verified issue record from public evidence registry...
       </div>
     );
   }
 
   if (error || !issue) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-4">
-        <h2 className="text-xl font-bold text-[#17212F]">Issue Not Found</h2>
+      <div className="mx-auto max-w-2xl px-4 py-20 text-center space-y-4">
+        <h2 className="text-2xl font-bold text-[#17212F]">Issue Registry Record Not Found</h2>
         <p className="text-xs text-[#5B6573]">
-          The requested issue slug does not exist or has been archived.
+          The requested issue slug does not exist or is currently inactive.
         </p>
-        <Link
-          href="/issues"
-          className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white"
-        >
-          Return to Issues Directory
-        </Link>
+        <div className="pt-2">
+          <Link
+            href="/issues"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#2457D6] px-5 py-2.5 text-xs font-bold text-white"
+          >
+            Return to Issues Directory
+          </Link>
+        </div>
       </div>
     );
   }
 
+  const isZeroState = stats ? stats.totalReports === 0 : true;
+  const isSingleReport = stats ? stats.totalReports === 1 : false;
+
+  // Format non-redundant dates
+  const isSameDate = firstReportDate && latestReportDate &&
+    format(new Date(firstReportDate), "yyyy-MM-dd") === format(new Date(latestReportDate), "yyyy-MM-dd");
+
   return (
-    <div className="space-y-10 pb-16">
-      {/* Header Banner */}
-      <section className="bg-white border-b border-[#E1E5EB] py-8 md:py-12">
+    <div className="space-y-10 sm:space-y-12 pb-20">
+      {/* Editorial Header Banner */}
+      <section className="bg-white border-b border-[#E1E5EB] py-10 sm:py-14">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
-            <div className="max-w-3xl space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
+            <div className="max-w-3xl space-y-4">
               {/* Badges */}
-              <div className="flex items-center gap-2">
-                <span className="rounded bg-[#F7F8FA] border border-[#E1E5EB] px-2.5 py-0.5 text-xs font-bold text-[#172B4D] uppercase tracking-wider">
-                  {issue.companyId}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-[#F7F8FA] border border-[#E1E5EB] px-2.5 py-1 text-xs font-bold text-[#172B4D] uppercase tracking-wider">
+                  Target: {issue.companyId}
                 </span>
-                <span className="rounded bg-[#EDF7F1] px-2.5 py-0.5 text-xs font-semibold text-[#18794E]">
-                  {issue.category.replace("_", " ")}
+                <span className="rounded-lg bg-[#EDF7F1] border border-[#18794E]/20 px-2.5 py-1 text-xs font-semibold text-[#18794E]">
+                  Scope: {issue.category.replace("_", " ")}
                 </span>
-                <span className="text-xs text-[#5B6573] border-l border-[#E1E5EB] pl-2">
-                  Active Issue Registry
+                <span className="text-xs text-[#5B6573] border-l border-[#E1E5EB] pl-2 font-medium">
+                  {isZeroState ? "Monitored Category" : "Active Public Record"}
                 </span>
               </div>
 
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#17212F] tracking-tight leading-tight">
+              {/* Title */}
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-[#17212F] tracking-tight leading-tight">
                 {issue.title}
               </h1>
 
+              {/* Neutral Scope Description */}
               <p className="text-sm sm:text-base text-[#5B6573] leading-relaxed">
                 {issue.description}
               </p>
 
-              {/* Reporting Dates Strip */}
-              <div className="flex flex-wrap items-center gap-4 text-xs text-[#5B6573] pt-1">
-                <span className="flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-[#5B6573]" />
-                  Earliest Report: {firstReportDate ? format(new Date(firstReportDate), "MMM d, yyyy") : "Awaiting first submission"}
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-[#5B6573]" />
-                  Latest Report: {latestReportDate ? format(new Date(latestReportDate), "MMM d, yyyy") : "Awaiting first submission"}
-                </span>
+              {/* Non-Redundant Date Strip */}
+              <div className="flex flex-wrap items-center gap-3 text-xs text-[#5B6573] pt-1 border-t border-[#E1E5EB]/60">
+                {isZeroState ? (
+                  <span className="flex items-center gap-1.5 text-[#5B6573]">
+                    <Clock className="h-3.5 w-3.5 text-[#5B6573]" />
+                    Awaiting initial customer documentation
+                  </span>
+                ) : isSingleReport || isSameDate ? (
+                  <span className="flex items-center gap-1.5 text-[#17212F] font-semibold">
+                    <Calendar className="h-3.5 w-3.5 text-[#2457D6]" />
+                    Reported on {format(new Date(firstReportDate!), "MMMM d, yyyy")}
+                  </span>
+                ) : (
+                  <>
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-[#5B6573]" />
+                      Earliest: <strong>{format(new Date(firstReportDate!), "MMM d, yyyy")}</strong>
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-[#5B6573]" />
+                      Latest: <strong>{format(new Date(latestReportDate!), "MMM d, yyyy")}</strong>
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0">
+            {/* Action Card */}
+            <div className="flex flex-col gap-2.5 w-full sm:w-auto shrink-0 bg-[#F7F8FA] p-4 rounded-2xl border border-[#E1E5EB]">
               <Link
-                href="/report"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#2457D6] px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#1B44AA] transition-colors"
+                href={`/report?issue=${issue.id}`}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2457D6] px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-[#1B44AA] transition-colors"
               >
-                <span>Report This Issue</span>
-                <ArrowRight className="h-3.5 w-3.5" />
+                <span>Report Similar Grievance</span>
+                <ArrowRight className="h-4 w-4" />
               </Link>
 
               <a
                 href={`/api/v1/issues/${issue.slug}/report?format=text`}
                 download
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#E1E5EB] bg-white px-4 py-2.5 text-xs font-semibold text-[#17212F] shadow-xs hover:bg-[#F7F8FA]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E1E5EB] bg-white px-4 py-2.5 text-xs font-semibold text-[#17212F] shadow-2xs hover:bg-[#F7F8FA] transition-colors"
               >
                 <Download className="h-3.5 w-3.5 text-[#5B6573]" />
-                <span>Download Escalation Pack</span>
+                <span>Export Escalation Pack</span>
               </a>
 
               <button
                 onClick={handleShare}
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#E1E5EB] bg-white px-4 py-2 text-xs font-medium text-[#5B6573] hover:bg-[#F7F8FA]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E1E5EB] bg-white px-4 py-2 text-xs font-semibold text-[#5B6573] hover:text-[#17212F] hover:bg-[#F7F8FA] transition-colors"
               >
                 <Share2 className="h-3.5 w-3.5" />
-                <span>Share Public Record</span>
+                <span>{copiedLink ? "Link Copied!" : "Share Public Record"}</span>
               </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Main Content Layout */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-10">
-        {/* Non-Governmental Independence & Allegation Disclaimer */}
-        <div className="rounded-lg border border-[#E1E5EB] bg-[#F7F8FA] p-3 text-xs text-[#5B6573] flex items-start gap-2">
+      {/* Main Dossier Body */}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-12">
+        {/* Independence Notice */}
+        <div className="rounded-xl border border-[#E1E5EB] bg-[#F7F8FA] p-3 text-xs text-[#5B6573] flex items-start gap-2.5">
           <HelpCircle className="h-4 w-4 text-[#087E8B] shrink-0 mt-0.5" />
           <span>
-            <strong>Public Documentation Notice: </strong> Submissions reflect consumers&apos; stated experiences and allegations under our public methodology. They are not judicial findings, government orders, or company-wide statistics.
+            <strong>Legal Notice: </strong> Records reflect customers&apos; stated allegations and voluntary evidence submitted under our public standard. Awaz does not adjudicate legal liability or represent the named retailer.
           </span>
         </div>
 
-        {/* Statistics Grid */}
-        <section aria-labelledby="issue-stats">
-          <h2 id="issue-stats" className="text-sm font-semibold uppercase tracking-wider text-[#5B6573] mb-3">
-            Issue Evidence Metrics
+        {/* 4-Tier Evidence Telemetry */}
+        <section aria-labelledby="issue-metrics" className="space-y-4">
+          <h2 id="issue-metrics" className="text-sm font-bold uppercase tracking-wider text-[#5B6573]">
+            Verified Evidence Telemetry
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               label="Eligible Reports"
               value={stats ? stats.totalReports : 0}
-              definition="Total eligible customer submissions under this specific issue category, excluding duplicate or withdrawn records."
-              subtext="Real consumer grievance records"
-              icon={<FileText className="h-4 w-4" />}
+              definition="Verified customer submissions satisfying fulfillment SLA criteria under this category."
+              subtext="Factual grievance records"
+              accentColor="blue"
             />
 
             <StatCard
               label="Unique Reporters"
               value={stats ? stats.uniqueReporters : 0}
-              definition="Distinct registered user accounts and anonymous filing consumers reporting this issue."
-              subtext="Independent consumer submissions"
-              icon={<Users className="h-4 w-4" />}
+              definition="Distinct registered user accounts and anonymous filing citizens reporting this issue."
+              subtext="Independent individuals affected"
+              accentColor="teal"
             />
 
             <StatCard
               label="Evidence Submitted"
               value={stats ? stats.evidenceBackedReports : 0}
-              definition="Reports where the consumer voluntarily attached tracking screenshots, receipts, or courier correspondence."
+              definition="Reports where the consumer voluntarily attached invoices, screenshots, or delivery correspondence."
               subtext={
                 stats && stats.totalReports > 0
                   ? `${Math.round((stats.evidenceBackedReports / stats.totalReports) * 100)}% of reported cases`
                   : "Private & optional"
               }
-              icon={<ShieldCheck className="h-4 w-4 text-[#087E8B]" />}
+              accentColor="teal"
             />
 
             <StatCard
               label="Reported Resolutions"
               value={stats ? stats.reportedResolutions : 0}
-              definition="Complaints where the reporting customer explicitly confirmed delivery fulfillment, replacement, or dispute settlement."
+              definition="Complaints where the reporting customer explicitly confirmed package delivery or refund."
               subtext={
                 stats && stats.totalReports > 0
                   ? `${stats.resolutionRatePct}% confirmed by customer`
                   : "Confirmed by reporter"
               }
-              icon={<CheckCircle2 className="h-4 w-4 text-[#18794E]" />}
+              accentColor="green"
             />
           </div>
         </section>
 
-        {/* 30-Day Trend Chart */}
-        <section aria-labelledby="issue-trend">
+        {/* Adaptive Telemetry Chart */}
+        <section aria-labelledby="issue-telemetry">
           <TrendChart
             trends={trends}
             range={trendRange}
             onRangeChange={(r) => setTrendRange(r)}
+            loading={loading}
           />
         </section>
 
-        {/* Active Action Campaigns & Regional Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Active Campaigns Column */}
+        {/* Multi-Column Dossier: Collective Action & Geographic Distribution */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Voluntary Campaigns Column */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-base font-bold text-[#17212F] flex items-center gap-2">
-              <Megaphone className="h-4 w-4 text-[#2457D6]" />
-              Voluntary Collective Action Campaigns
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-[#17212F] flex items-center gap-2">
+                <Megaphone className="h-4 w-4 text-[#2457D6]" />
+                Voluntary Collective Representation
+              </h2>
+            </div>
 
             {campaigns.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-[#E1E5EB] bg-white p-6 text-center text-xs text-[#5B6573]">
-                No active campaigns for this issue at present.
+              <div className="rounded-2xl border border-dashed border-[#E1E5EB] bg-white p-6 text-center text-xs text-[#5B6573] space-y-1">
+                <p className="font-semibold text-[#17212F]">No collective action campaign opened yet</p>
+                <p>Campaigns are formed when multiple consumers document identical systemic fulfillment failures.</p>
               </div>
             ) : (
               campaigns.map((c) => (
-                <div key={c.id} className="rounded-xl border border-[#E1E5EB] bg-white p-6 shadow-xs space-y-3">
+                <div key={c.id} className="rounded-2xl border border-[#E1E5EB] bg-white p-6 shadow-xs space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="rounded bg-[#EDF7F1] px-2.5 py-0.5 text-xs font-semibold text-[#18794E]">
+                    <span className="rounded-md bg-[#EDF7F1] px-2.5 py-0.5 text-xs font-bold text-[#18794E]">
                       {c.status}
                     </span>
-                    <span className="text-xs text-[#5B6573]">
-                      {c.participantCount} customer{c.participantCount !== 1 ? "s" : ""} joined
+                    <span className="text-xs text-[#5B6573] font-medium">
+                      {c.participantCount} customer{c.participantCount !== 1 ? "s" : ""} participating
                     </span>
                   </div>
 
                   <h3 className="text-base font-bold text-[#17212F]">{c.title}</h3>
                   <p className="text-xs text-[#5B6573] leading-relaxed">{c.objective}</p>
 
-                  <div className="rounded-lg bg-[#F7F8FA] p-3 text-xs border border-[#E1E5EB] space-y-1">
-                    <span className="font-semibold text-[#17212F]">Requested Corrective Action:</span>
+                  <div className="rounded-xl bg-[#F7F8FA] p-3.5 text-xs border border-[#E1E5EB] space-y-1">
+                    <span className="font-semibold text-[#17212F] block">Requested Corrective Resolution:</span>
                     <p className="text-[#5B6573] whitespace-pre-wrap">{c.requestedAction}</p>
                   </div>
 
                   <div className="pt-2 flex items-center justify-between">
                     <Link
                       href={`/campaigns/${c.id}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white hover:bg-[#1B44AA]"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#2457D6] px-4 py-2 text-xs font-bold text-white hover:bg-[#1B44AA] transition-colors"
                     >
-                      <span>Join Campaign & View Escalation Pack</span>
+                      <span>Join Campaign &amp; Access Dossier</span>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </div>
@@ -319,26 +346,29 @@ function IssueDetailContent() {
             )}
           </div>
 
-          {/* Regional Geographic Distribution */}
+          {/* Regional Geographic Distribution Column */}
           <div className="space-y-4">
             <h2 className="text-base font-bold text-[#17212F] flex items-center gap-2">
               <MapPin className="h-4 w-4 text-[#087E8B]" />
               Geographic Distribution
             </h2>
-            <div className="rounded-xl border border-[#E1E5EB] bg-white p-5 shadow-xs space-y-3">
+            <div className="rounded-2xl border border-[#E1E5EB] bg-white p-5 shadow-xs space-y-3">
               <p className="text-xs text-[#5B6573]">
-                Anonymized complaint volume by state or union territory:
+                Anonymized complaint volume grouped by Indian State or Union Territory:
               </p>
               {regions.length === 0 ? (
-                <p className="text-xs text-[#5B6573] py-2">
-                  No regional reports logged yet. Reports will appear grouped by Indian state as consumers file verified submissions.
-                </p>
+                <div className="rounded-xl bg-[#F7F8FA] p-4 text-center text-xs text-[#5B6573]">
+                  No regional logs recorded yet. State breakdown populates automatically upon verified submissions.
+                </div>
               ) : (
                 <div className="space-y-2">
                   {regions.map((r) => (
-                    <div key={r.region} className="flex items-center justify-between text-xs py-1 border-b border-[#E1E5EB]/60 last:border-0">
-                      <span className="font-medium text-[#17212F]">{r.region}</span>
-                      <span className="tabular-nums font-semibold text-[#2457D6]">
+                    <div
+                      key={r.region}
+                      className="flex items-center justify-between text-xs py-1.5 border-b border-[#E1E5EB]/60 last:border-0"
+                    >
+                      <span className="font-semibold text-[#17212F]">{r.region}</span>
+                      <span className="tabular-nums font-bold text-[#2457D6] bg-[#EFF4FF] px-2 py-0.5 rounded-md">
                         {r.count} report{r.count !== 1 ? "s" : ""}
                       </span>
                     </div>
@@ -349,28 +379,32 @@ function IssueDetailContent() {
           </div>
         </div>
 
-        {/* Public Timeline Updates */}
-        <section aria-labelledby="timeline-heading">
-          <div className="rounded-xl border border-[#E1E5EB] bg-white p-6 shadow-xs space-y-4">
-            <h2 id="timeline-heading" className="text-base font-bold text-[#17212F] flex items-center gap-2">
+        {/* Public Timeline Updates & Milestones */}
+        <section aria-labelledby="updates-heading">
+          <div className="rounded-2xl border border-[#E1E5EB] bg-white p-6 shadow-xs space-y-4">
+            <h2 id="updates-heading" className="text-base font-bold text-[#17212F] flex items-center gap-2">
               <Clock className="h-4 w-4 text-[#087E8B]" />
-              Public Timeline Updates & Milestone History
+              Public Milestones &amp; Investigation History
             </h2>
             {updates.length === 0 ? (
-              <p className="text-xs text-[#5B6573] py-2">No public updates logged yet.</p>
+              <p className="text-xs text-[#5B6573] py-2">
+                No public timeline updates logged yet for this category.
+              </p>
             ) : (
               <div className="divide-y divide-[#E1E5EB]">
                 {updates.map((u) => (
-                  <div key={u.id} className="py-3 text-xs space-y-1">
+                  <div key={u.id} className="py-3.5 text-xs space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[#F7F8FA] border border-[#E1E5EB] text-[#172B4D]">
-                        {u.updateType}
+                        {u.updateType.replace("_", " ")}
                       </span>
                       <span className="text-[#5B6573]">
                         {formatDistanceToNow(new Date(u.publishedAt), { addSuffix: true })}
                       </span>
                     </div>
-                    <p className="text-[#17212F] leading-relaxed max-w-3xl">{u.publicContent}</p>
+                    <p className="text-[#17212F] leading-relaxed max-w-3xl font-medium">
+                      {u.publicContent}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -378,19 +412,19 @@ function IssueDetailContent() {
           </div>
         </section>
 
-        {/* Dispute / Inaccuracy Action */}
-        <div className="rounded-xl border border-[#E1E5EB] bg-[#F7F8FA] p-5 text-xs text-[#5B6573] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+        {/* Dispute & Factual Correction Notice */}
+        <div className="rounded-2xl border border-[#E1E5EB] bg-[#F7F8FA] p-5 text-xs text-[#5B6573] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
             <HelpCircle className="h-4 w-4 text-[#087E8B] shrink-0" />
             <span>
-              Are you a consumer or retailer representative looking to correct or dispute inaccurate records?
+              Are you a consumer or retailer representative looking to verify or dispute factual accuracy?
             </span>
           </div>
           <a
             href="mailto:corrections@awaz.org?subject=Dispute%20Regarding%20Issue"
-            className="text-xs font-semibold text-[#2457D6] hover:underline shrink-0"
+            className="text-xs font-bold text-[#2457D6] hover:underline shrink-0"
           >
-            File Correction Request
+            File Correction Request →
           </a>
         </div>
       </div>
