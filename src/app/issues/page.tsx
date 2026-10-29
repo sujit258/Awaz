@@ -16,8 +16,10 @@ interface IssueItem {
   totalReports: number;
   uniqueReporters: number;
   evidenceBackedReports: number;
+  reportedResolved?: number;
   activeCampaignsCount: number;
   updatesCount: number;
+  latestReportAt?: string | null;
 }
 
 export default function IssuesDirectoryPage() {
@@ -133,8 +135,8 @@ export default function IssuesDirectoryPage() {
               totalReports={issue.totalReports}
               uniqueReporters={issue.uniqueReporters}
               evidenceBackedReports={issue.evidenceBackedReports}
-              reportedResolved={0}
-              updatedAt={issue.publishedAt}
+              reportedResolved={issue.reportedResolved || 0}
+              latestReportAt={issue.latestReportAt}
             />
           ))}
         </div>

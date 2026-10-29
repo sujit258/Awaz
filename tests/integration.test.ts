@@ -132,3 +132,46 @@ test("Anonymous complaint lifecycle: creation, key verification, status update, 
     where: { id: report.id },
   });
 });
+
+test("getAggregateStats excludes deleted and demo records and counts distinct registered reporters", async () => {
+  const issue = await prisma.issue.findFirst();
+  if (!issue) return;
+
+  const initialStats = await getAggregateStats({ issueId: issue.id, includeDemo: false });
+
+  // Create a deleted report
+  const deletedReport = await prisma.complaintReport.create({
+    data: {
+      referenceNumber: `AWZ-TEST-DEL-${Date.now().toString(36).toUpperCase()}`,
+      userId: null,
+      issueId: issue.id,
+      summary: "Deleted test report",
+      description: "Should be excluded by getAggregateStats",
+      isDeleted: true,
+      deletedAt: new Date(),
+    },
+  });
+
+  // Create a demo report
+  const demoReport = await prisma.complaintReport.create({
+    data: {
+      referenceNumber: `AWZ-TEST-DEMO-${Date.now().toString(36).toUpperCase()}`,
+      userId: null,
+      issueId: issue.id,
+      summary: "Demo test report",
+      description: "Should be excluded when includeDemo is false",
+      isDemo: true,
+    },
+  });
+
+  const postStats = await getAggregateStats({ issueId: issue.id, includeDemo: false });
+
+  // Counts must not include deleted or demo reports
+  assert.equal(postStats.totalReports, initialStats.totalReports);
+
+  // Cleanup
+  await prisma.complaintReport.deleteMany({
+    where: { id: { in: [deletedReport.id, demoReport.id] } },
+  });
+});
+

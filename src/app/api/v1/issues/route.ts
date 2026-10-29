@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
           },
         });
 
-        const [registeredReporters, anonReporters] = await Promise.all([
+        const [registeredReporters, anonReporters, latestReport, resolvedCount] = await Promise.all([
           prisma.complaintReport.findMany({
             where: {
               issueId: issue.id,
@@ -80,6 +80,24 @@ export async function GET(req: NextRequest) {
               ...(isProduction ? { isDemo: false } : {}),
             },
           }),
+          prisma.complaintReport.findFirst({
+            where: {
+              issueId: issue.id,
+              isDeleted: false,
+              verificationStatus: { not: "REJECTED" },
+              ...(isProduction ? { isDemo: false } : {}),
+            },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+          }),
+          prisma.complaintReport.count({
+            where: {
+              issueId: issue.id,
+              isDeleted: false,
+              complaintStatus: "RESOLVED_BY_CUSTOMER",
+              ...(isProduction ? { isDemo: false } : {}),
+            },
+          }),
         ]);
 
         return {
@@ -94,8 +112,10 @@ export async function GET(req: NextRequest) {
           totalReports: issue._count.reports,
           uniqueReporters: registeredReporters.length + anonReporters,
           evidenceBackedReports: evidenceCount,
+          reportedResolved: resolvedCount,
           activeCampaignsCount: issue._count.campaigns,
           updatesCount: issue._count.updates,
+          latestReportAt: latestReport?.createdAt ? latestReport.createdAt.toISOString() : null,
         };
       })
     );
