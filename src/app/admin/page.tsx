@@ -5,11 +5,12 @@ import Link from "next/link";
 import {
   ShieldAlert,
   CheckCircle2,
-  XCircle,
   FileText,
   Filter,
   RefreshCw,
   Eye,
+  AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -21,14 +22,17 @@ interface AdminReport {
   orderStatus: string;
   complaintStatus: string;
   verificationStatus: "UNVERIFIED" | "EVIDENCE_SUBMITTED" | "VERIFIED" | "REJECTED";
-  promisedDeliveryDate: string;
+  promisedDeliveryDate: string | null;
   approximateRegion: string | null;
+  orderReference: string | null;
+  isDeleted: boolean;
   createdAt: string;
   user: {
     id: string;
     email: string;
     displayName: string | null;
-  };
+    role: string;
+  } | null;
   issue: {
     id: string;
     slug: string;
@@ -45,10 +49,22 @@ interface AdminReport {
   }>;
 }
 
+function formatDateSafe(dateStr?: string | null, fallback = "Not specified") {
+  if (!dateStr) return fallback;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return fallback;
+    return format(d, "MMM d, yyyy");
+  } catch {
+    return fallback;
+  }
+}
+
 export default function AdminDashboardPage() {
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string; email: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [verificationFilter, setVerificationFilter] = useState("ALL");
@@ -60,53 +76,74 @@ export default function AdminDashboardPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+    let ignore = false;
 
-    async function loadData() {
+    async function init() {
       try {
-        const authRes = await fetch("/api/v1/auth/me");
-        if (authRes.ok) {
-          const authData = await authRes.json();
-          if (active) setCurrentUser(authData.user);
+        const authRes = await fetch("/api/v1/auth/me", { cache: "no-store" });
+        if (!authRes.ok) {
+          if (!ignore) {
+            setCurrentUser(null);
+            setReports([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const authData = await authRes.json();
+        if (!ignore) setCurrentUser(authData.user);
+
+        if (!authData.user || (authData.user.role !== "ADMIN" && authData.user.role !== "MODERATOR")) {
+          if (!ignore) setLoading(false);
+          return;
         }
 
         const params = new URLSearchParams();
-        if (verificationFilter !== "ALL") params.set("verificationStatus", verificationFilter);
+        if (verificationFilter !== "ALL") {
+          params.set("verificationStatus", verificationFilter);
+        }
 
-        const res = await fetch(`/api/v1/admin/reports?${params.toString()}`);
+        const res = await fetch(`/api/v1/admin/reports?${params.toString()}`, { cache: "no-store" });
         if (res.ok) {
           const data = await res.json();
-          if (active) setReports(data.reports || []);
+          if (!ignore) setReports(data.reports || []);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          if (!ignore) setError(errData.error || "Failed to load moderation reports.");
         }
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error("Moderation queue fetch error:", err);
+        if (!ignore) setError("Network or server connection error while loading moderation queue.");
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (!ignore) setLoading(false);
       }
     }
 
-    loadData();
+    init();
 
     return () => {
-      active = false;
+      ignore = true;
     };
   }, [verificationFilter]);
 
-  async function loadReports() {
+  async function reloadReports() {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
       const params = new URLSearchParams();
-      if (verificationFilter !== "ALL") params.set("verificationStatus", verificationFilter);
-
-      const res = await fetch(`/api/v1/admin/reports?${params.toString()}`);
+      if (verificationFilter !== "ALL") {
+        params.set("verificationStatus", verificationFilter);
+      }
+      const res = await fetch(`/api/v1/admin/reports?${params.toString()}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setReports(data.reports || []);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.error || "Failed to load moderation reports.");
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      setError("Network or server connection error.");
     } finally {
       setLoading(false);
     }
@@ -126,20 +163,23 @@ export default function AdminDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           verificationStatus: status,
-          reviewNote: reviewNote || `Marked ${status} by moderator`,
-          evidenceId: evidenceId || selectedReport.evidence[0]?.id || null,
+          reviewNote: reviewNote || `Marked ${status} by verification officer`,
+          evidenceId: evidenceId || selectedReport.evidence?.[0]?.id || null,
           evidenceStatus: status,
         }),
       });
 
       if (res.ok) {
-        setActionSuccess(`Report ${selectedReport.referenceNumber} updated to ${status}.`);
+        setActionSuccess(`Report ${selectedReport.referenceNumber} status set to ${status}.`);
         setSelectedReport(null);
         setReviewNote("");
-        await loadReports();
+        await reloadReports();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to submit verification review.");
       }
     } catch {
-      alert("Error submitting review.");
+      alert("Network error while submitting verification review.");
     } finally {
       setActionLoading(false);
     }
@@ -148,6 +188,7 @@ export default function AdminDashboardPage() {
   async function handleModerationAction(action: "FLAG_DUPLICATE" | "REJECT") {
     if (!selectedReport) return;
     setActionLoading(true);
+    setActionSuccess(null);
 
     try {
       const res = await fetch(`/api/v1/admin/reports/${selectedReport.id}/moderation`, {
@@ -155,43 +196,69 @@ export default function AdminDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action,
-          reason: reviewNote || `Applied ${action} action`,
+          reason: reviewNote || `Applied ${action} action in moderation`,
           targetType: "REPORT",
           targetId: selectedReport.id,
         }),
       });
 
       if (res.ok) {
-        setActionSuccess(`Applied ${action} to ${selectedReport.referenceNumber}.`);
+        setActionSuccess(`Applied action ${action} to ${selectedReport.referenceNumber}.`);
         setSelectedReport(null);
         setReviewNote("");
-        await loadReports();
+        await reloadReports();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Failed to submit moderation action.");
       }
     } catch {
-      alert("Error submitting moderation action.");
+      alert("Network error while submitting moderation action.");
     } finally {
       setActionLoading(false);
     }
   }
 
-  if (!currentUser || (currentUser.role !== "ADMIN" && currentUser.role !== "MODERATOR")) {
+  // 1. Loading State
+  if (loading) {
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center space-y-4">
-        <ShieldAlert className="mx-auto h-12 w-12 text-[#B42318]" />
-        <h2 className="text-xl font-bold text-[#17212F]">Access Restricted</h2>
-        <p className="text-xs text-[#5B6573]">
-          This area is restricted to authorized Awaz verification officers and moderators. Please sign in with staff credentials.
+      <div className="mx-auto max-w-7xl px-4 py-20 text-center space-y-4">
+        <div className="inline-flex h-10 w-10 animate-spin items-center justify-center rounded-full border-2 border-[#2457D6] border-t-transparent text-[#2457D6]">
+          <RefreshCw className="h-5 w-5" />
+        </div>
+        <p className="text-sm font-medium text-[#5B6573]">
+          Checking staff credentials & loading moderation queue…
         </p>
-        <Link
-          href="/login"
-          className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white"
-        >
-          Sign In as Staff
-        </Link>
       </div>
     );
   }
 
+  // 2. Access Restricted (Unauthenticated or Non-staff Citizen)
+  if (!currentUser || (currentUser.role !== "ADMIN" && currentUser.role !== "MODERATOR")) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center space-y-5">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#FEF3F2] text-[#B42318]">
+          <ShieldAlert className="h-7 w-7" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-[#17212F]">Staff Access Restricted</h2>
+          <p className="text-xs text-[#5B6573] leading-relaxed">
+            This console is reserved for authorized Awaz verification officers and moderators. Please sign in with staff credentials.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link
+            href="/login?redirect=/admin"
+            className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-5 py-2.5 text-xs font-semibold text-white hover:bg-[#1B44AA] transition-colors"
+          >
+            <span>Sign In as Staff</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Authorized Console View
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-8">
       {/* Header */}
@@ -201,7 +268,9 @@ export default function AdminDashboardPage() {
             <span className="rounded bg-[#087E8B] px-2.5 py-0.5 text-xs font-bold text-white uppercase tracking-wider">
               Moderation Console
             </span>
-            <span className="text-xs text-[#5B6573]">Role: {currentUser.role}</span>
+            <span className="text-xs font-semibold text-[#5B6573]">
+              Role: <span className="text-[#17212F]">{currentUser.role}</span> ({currentUser.email})
+            </span>
           </div>
           <h1 className="text-2xl font-bold text-[#17212F] mt-1">
             Evidence Verification & Complaint Queue
@@ -209,8 +278,8 @@ export default function AdminDashboardPage() {
         </div>
 
         <button
-          onClick={loadReports}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#17212F] hover:bg-[#F7F8FA]"
+          onClick={() => reloadReports()}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#17212F] hover:bg-[#F7F8FA] transition-colors shadow-xs"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           <span>Refresh Queue</span>
@@ -218,29 +287,54 @@ export default function AdminDashboardPage() {
       </div>
 
       {actionSuccess && (
-        <div className="rounded-lg bg-[#EDF7F1] border border-[#18794E]/20 p-3 text-xs text-[#18794E]">
-          {actionSuccess}
+        <div className="rounded-lg bg-[#EDF7F1] border border-[#18794E]/20 p-3.5 text-xs text-[#18794E] flex items-center justify-between">
+          <span>{actionSuccess}</span>
+          <button
+            onClick={() => setActionSuccess(null)}
+            className="font-bold hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg bg-[#FEF3F2] border border-[#B42318]/20 p-4 text-xs text-[#B42318] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => reloadReports()}
+            className="rounded bg-[#B42318] text-white px-3 py-1 font-semibold hover:bg-[#911d13]"
+          >
+            Retry
+          </button>
         </div>
       )}
 
       {/* Filter bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E1E5EB] shadow-xs text-xs">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#E1E5EB] shadow-xs text-xs">
+        <div className="flex flex-wrap items-center gap-2">
           <Filter className="h-3.5 w-3.5 text-[#5B6573]" />
-          <span className="font-semibold text-[#5B6573]">Verification:</span>
+          <span className="font-semibold text-[#5B6573]">Filter Status:</span>
           {["ALL", "EVIDENCE_SUBMITTED", "UNVERIFIED", "VERIFIED", "REJECTED"].map((st) => (
             <button
               key={st}
               onClick={() => setVerificationFilter(st)}
               className={`px-3 py-1 rounded-md font-medium transition-colors ${
                 verificationFilter === st
-                  ? "bg-[#2457D6] text-white"
-                  : "bg-[#F7F8FA] text-[#5B6573] hover:text-[#17212F]"
+                  ? "bg-[#2457D6] text-white font-semibold"
+                  : "bg-[#F7F8FA] text-[#5B6573] hover:text-[#17212F] hover:bg-[#EAECEF]"
               }`}
             >
-              {st}
+              {st === "ALL" ? "All Statuses" : st}
             </button>
           ))}
+        </div>
+
+        <div className="text-xs text-[#5B6573]">
+          Showing <strong>{reports.length}</strong> report{reports.length !== 1 ? "s" : ""}
         </div>
       </div>
 
@@ -253,44 +347,59 @@ export default function AdminDashboardPage() {
                 <th className="py-3 px-4 font-semibold">Ref Number</th>
                 <th className="py-3 px-4 font-semibold">Issue Category</th>
                 <th className="py-3 px-4 font-semibold">Reporter</th>
-                <th className="py-3 px-4 font-semibold">Status</th>
+                <th className="py-3 px-4 font-semibold">Complaint Status</th>
                 <th className="py-3 px-4 font-semibold">Verification</th>
                 <th className="py-3 px-4 font-semibold">Evidence</th>
                 <th className="py-3 px-4 font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E1E5EB]">
-              {loading ? (
+              {reports.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-[#5B6573]">
-                    Loading queue...
-                  </td>
-                </tr>
-              ) : reports.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-[#5B6573]">
-                    No reports match the active filter criteria.
+                  <td colSpan={7} className="py-12 text-center space-y-2">
+                    <FileText className="mx-auto h-8 w-8 text-[#5B6573]/50" />
+                    <p className="font-semibold text-sm text-[#17212F]">
+                      Moderation queue is empty
+                    </p>
+                    <p className="text-xs text-[#5B6573]">
+                      {verificationFilter === "ALL"
+                        ? "There are currently no active complaint reports awaiting moderation."
+                        : `No reports found matching the '${verificationFilter}' filter.`}
+                    </p>
                   </td>
                 </tr>
               ) : (
                 reports.map((rep) => (
-                  <tr key={rep.id} className="hover:bg-[#F7F8FA]/60">
+                  <tr key={rep.id} className="hover:bg-[#F7F8FA]/60 transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-[#17212F]">
                       {rep.referenceNumber}
                     </td>
                     <td className="py-3 px-4">
                       <span className="font-semibold text-[#17212F] block max-w-xs truncate">
-                        {rep.issue.title}
+                        {rep.issue?.title || "Unknown Issue"}
                       </span>
-                      <span className="text-[10px] text-[#5B6573]">{rep.approximateRegion || "India"}</span>
+                      <span className="text-[10px] text-[#5B6573]">
+                        {rep.approximateRegion || "India"}
+                      </span>
                     </td>
                     <td className="py-3 px-4 text-[#5B6573]">
-                      {rep.user.email}
+                      {rep.user?.email ? (
+                        <span className="font-medium text-[#17212F]">{rep.user.email}</span>
+                      ) : (
+                        <span className="italic text-[#8A94A6]">Anonymous Citizen</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F7F8FA] border border-[#E1E5EB] text-[#172B4D]">
-                        {rep.complaintStatus}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F7F8FA] border border-[#E1E5EB] text-[#172B4D]">
+                          {rep.complaintStatus}
+                        </span>
+                        {rep.isDeleted && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#FEF3F2] text-[#B42318] border border-[#B42318]/20">
+                            WITHDRAWN
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       <span
@@ -308,7 +417,7 @@ export default function AdminDashboardPage() {
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      {rep.evidence.length > 0 ? (
+                      {rep.evidence && rep.evidence.length > 0 ? (
                         <span className="inline-flex items-center gap-1 font-semibold text-[#087E8B]">
                           <FileText className="h-3 w-3" />
                           {rep.evidence.length} file{rep.evidence.length !== 1 ? "s" : ""}
@@ -320,7 +429,7 @@ export default function AdminDashboardPage() {
                     <td className="py-3 px-4">
                       <button
                         onClick={() => setSelectedReport(rep)}
-                        className="inline-flex items-center gap-1 rounded bg-[#2457D6] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1B44AA]"
+                        className="inline-flex items-center gap-1 rounded bg-[#2457D6] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#1B44AA] transition-colors"
                       >
                         <Eye className="h-3 w-3" />
                         <span>Review</span>
@@ -340,16 +449,15 @@ export default function AdminDashboardPage() {
           <div className="rounded-xl border border-[#E1E5EB] bg-white p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-[#E1E5EB] pb-3">
               <div>
-                <span className="font-mono text-xs font-bold text-[#172B4D]">
-                  {selectedReport.referenceNumber}
-                </span>
-                <h3 className="text-base font-bold text-[#17212F] mt-0.5">
-                  Moderator Review: {selectedReport.summary}
+                <h3 className="text-lg font-bold text-[#17212F]">
+                  Review Report {selectedReport.referenceNumber}
                 </h3>
+                <span className="text-xs text-[#5B6573]">{selectedReport.issue?.title}</span>
               </div>
               <button
                 onClick={() => setSelectedReport(null)}
-                className="text-[#5B6573] hover:text-[#17212F] text-sm font-bold"
+                className="text-[#5B6573] hover:text-[#17212F] text-lg font-bold p-1"
+                aria-label="Close modal"
               >
                 ✕
               </button>
@@ -358,91 +466,132 @@ export default function AdminDashboardPage() {
             {/* Private Details */}
             <div className="rounded-lg bg-[#F7F8FA] p-4 text-xs space-y-2 border border-[#E1E5EB]">
               <div className="grid grid-cols-2 gap-2 text-[#5B6573]">
-                <div>Reporter Email: <strong className="text-[#17212F]">{selectedReport.user.email}</strong></div>
-                <div>Region: <strong className="text-[#17212F]">{selectedReport.approximateRegion || "Unspecified"}</strong></div>
-                <div>Promised Date: <strong className="text-[#17212F]">{format(new Date(selectedReport.promisedDeliveryDate), "MMM d, yyyy")}</strong></div>
-                <div>Order Status: <strong className="text-[#17212F]">{selectedReport.orderStatus}</strong></div>
+                <div>
+                  Reporter:{" "}
+                  <strong className="text-[#17212F]">
+                    {selectedReport.user?.email || "Anonymous Citizen"}
+                  </strong>
+                </div>
+                <div>
+                  Region:{" "}
+                  <strong className="text-[#17212F]">
+                    {selectedReport.approximateRegion || "Unspecified"}
+                  </strong>
+                </div>
+                <div>
+                  Promised Date:{" "}
+                  <strong className="text-[#17212F]">
+                    {formatDateSafe(selectedReport.promisedDeliveryDate, "Not specified")}
+                  </strong>
+                </div>
+                <div>
+                  Order Status:{" "}
+                  <strong className="text-[#17212F]">{selectedReport.orderStatus}</strong>
+                </div>
               </div>
               <div className="pt-2 border-t border-[#E1E5EB]">
-                <span className="text-[#5B6573] block mb-1">Full Description:</span>
-                <p className="text-[#17212F] whitespace-pre-wrap">{selectedReport.description}</p>
+                <span className="text-[#5B6573] block mb-1">Full Summary:</span>
+                <p className="text-[#17212F] font-semibold mb-2">{selectedReport.summary}</p>
+                <span className="text-[#5B6573] block mb-1">Citizen Narrative:</span>
+                <p className="text-[#17212F] whitespace-pre-wrap leading-relaxed">
+                  {selectedReport.description}
+                </p>
               </div>
             </div>
 
             {/* Evidence details */}
             <div className="space-y-2">
               <h4 className="text-xs font-semibold uppercase tracking-wider text-[#17212F]">
-                Attached Evidence Files ({selectedReport.evidence.length})
+                Attached Evidence Files ({selectedReport.evidence ? selectedReport.evidence.length : 0})
               </h4>
-              {selectedReport.evidence.length === 0 ? (
-                <p className="text-xs text-[#5B6573] italic">No evidence attached to this report.</p>
+              {!selectedReport.evidence || selectedReport.evidence.length === 0 ? (
+                <p className="text-xs text-[#5B6573] italic">No evidence files attached to this report.</p>
               ) : (
                 <div className="space-y-2">
                   {selectedReport.evidence.map((ev) => (
                     <div
                       key={ev.id}
-                      className="rounded-lg border border-[#E1E5EB] p-3 text-xs flex items-center justify-between bg-white"
+                      className="flex items-center justify-between p-3 rounded-lg border border-[#E1E5EB] bg-white text-xs"
                     >
-                      <div>
-                        <span className="font-mono font-semibold text-[#17212F]">{ev.fileName}</span>
-                        <div className="text-[10px] text-[#5B6573] mt-0.5">
-                          {ev.fileType} • {Math.round(ev.fileSize / 1024)} KB • Redaction: {ev.redactionStatus}
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-[#087E8B]" />
+                        <div>
+                          <p className="font-semibold text-[#17212F]">{ev.fileName}</p>
+                          <p className="text-[10px] text-[#5B6573]">
+                            {(ev.fileSize / 1024).toFixed(1)} KB • Review: {ev.reviewStatus}
+                          </p>
                         </div>
                       </div>
-                      <span className="text-[11px] font-bold text-[#087E8B] uppercase">
-                        {ev.reviewStatus}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          disabled={actionLoading}
+                          onClick={() => handleVerificationReview("VERIFIED", ev.id)}
+                          className="px-2 py-1 rounded bg-[#EDF7F1] text-[#18794E] hover:bg-[#D4EEDF] font-semibold text-[10px]"
+                        >
+                          Approve Evidence
+                        </button>
+                        <button
+                          disabled={actionLoading}
+                          onClick={() => handleVerificationReview("REJECTED", ev.id)}
+                          className="px-2 py-1 rounded bg-[#FEF3F2] text-[#B42318] hover:bg-[#FDD8D5] font-semibold text-[10px]"
+                        >
+                          Reject
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Moderator Note */}
-            <div>
-              <label className="block text-xs font-semibold text-[#17212F] mb-1">
-                Moderation Reason / Audit Note *
+            {/* Review Note */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#17212F] block">
+                Verification Note (Internal Audit Log)
               </label>
               <textarea
-                rows={3}
-                placeholder="State the factual basis for verifying or rejecting this grievance..."
                 value={reviewNote}
                 onChange={(e) => setReviewNote(e.target.value)}
-                className="w-full rounded-lg border border-[#E1E5EB] p-2.5 text-xs text-[#17212F]"
-              ></textarea>
+                placeholder="Reasoning for verification determination (e.g., invoice order ID confirmed, date verified, screenshot clear)..."
+                rows={2}
+                className="w-full rounded-lg border border-[#E1E5EB] p-2.5 text-xs focus:border-[#2457D6] focus:outline-none"
+              />
             </div>
 
-            {/* Action Buttons */}
-            <div className="pt-3 border-t border-[#E1E5EB] flex flex-wrap items-center justify-between gap-2">
+            {/* Modal Actions */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-[#E1E5EB]">
               <div className="flex items-center gap-2">
                 <button
-                  type="button"
                   disabled={actionLoading}
                   onClick={() => handleModerationAction("FLAG_DUPLICATE")}
-                  className="rounded-lg border border-[#E1E5EB] px-3 py-1.5 text-xs font-medium text-[#5B6573] hover:bg-[#F7F8FA]"
+                  className="rounded-lg border border-[#E1E5EB] bg-[#F7F8FA] px-3 py-1.5 text-xs font-semibold text-[#17212F] hover:bg-[#EAECEF] disabled:opacity-50"
                 >
                   Flag Duplicate
+                </button>
+                <button
+                  disabled={actionLoading}
+                  onClick={() => handleModerationAction("REJECT")}
+                  className="rounded-lg border border-[#B42318]/20 bg-[#FEF3F2] px-3 py-1.5 text-xs font-semibold text-[#B42318] hover:bg-[#FDD8D5] disabled:opacity-50"
+                >
+                  Reject Report
                 </button>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
-                  type="button"
                   disabled={actionLoading}
-                  onClick={() => handleVerificationReview("REJECTED")}
-                  className="inline-flex items-center gap-1 rounded-lg bg-[#FEF3F2] border border-[#B42318]/20 px-4 py-2 text-xs font-semibold text-[#B42318] hover:bg-[#FEE4E2]"
+                  onClick={() => setSelectedReport(null)}
+                  className="rounded-lg border border-[#E1E5EB] bg-white px-3 py-1.5 text-xs font-semibold text-[#5B6573] hover:bg-[#F7F8FA]"
                 >
-                  <XCircle className="h-3.5 w-3.5" />
-                  <span>Reject</span>
+                  Cancel
                 </button>
                 <button
-                  type="button"
                   disabled={actionLoading}
                   onClick={() => handleVerificationReview("VERIFIED")}
-                  className="inline-flex items-center gap-1 rounded-lg bg-[#18794E] px-4 py-2 text-xs font-semibold text-white hover:bg-[#125838]"
+                  className="rounded-lg bg-[#18794E] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#125838] disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>Verify Evidence</span>
+                  <span>Mark Verified</span>
                 </button>
               </div>
             </div>
