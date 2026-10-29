@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Lock, Mail, ArrowRight, User } from "lucide-react";
+import { Lock, Mail, ArrowRight, User } from "lucide-react";
+import AwazLogo from "@/components/brand/AwazLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -45,9 +46,7 @@ export default function LoginPage() {
     <div className="mx-auto max-w-md px-4 py-16 sm:px-6">
       <div className="rounded-xl border border-[#E1E5EB] bg-white p-6 sm:p-8 shadow-xs space-y-6">
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-[#2457D6] text-white">
-            <Shield className="h-5 w-5" />
-          </div>
+          <AwazLogo variant="icon" size={44} className="mx-auto" />
           <h1 className="text-xl font-bold text-[#17212F]">
             {isRegister ? "Create a Citizen Account" : "Sign In to Awaz"}
           </h1>
