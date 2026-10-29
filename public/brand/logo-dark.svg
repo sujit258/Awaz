@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48" width="240" height="48" fill="none">
+  <defs>
+    <linearGradient id="awaz-dark-logo-bg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="teal-accent-dark-logo" x1="30" y1="9" x2="34" y2="31" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#2DD4BF"/>
+      <stop offset="100%" stop-color="#087E8B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 48x48 Brand Icon -->
+  <g transform="translate(0, 0)">
+    <rect width="48" height="48" rx="12" fill="url(#awaz-dark-logo-bg)"/>
+    <rect x="0.75" y="0.75" width="46.5" height="46.5" rx="11.25" stroke="#334155" stroke-width="1.5"/>
+    
+    <!-- Soundwave & Evidence Bars -->
+    <rect x="11.25" y="20.25" width="4.125" height="11.25" rx="2.06" fill="#3B82F6"/>
+    <rect x="17.625" y="14.25" width="4.125" height="20.25" rx="2.06" fill="#F8FAFC"/>
+    <rect x="24" y="10.5" width="4.125" height="25.5" rx="2.06" fill="#F8FAFC"/>
+    <rect x="30.375" y="16.5" width="4.125" height="16.5" rx="2.06" fill="url(#teal-accent-dark-logo)"/>
+    <circle cx="32.43" cy="10.5" r="2.06" fill="#2DD4BF"/>
+  </g>
+
+  <!-- Awaz Wordmark (Light) -->
+  <text x="60" y="27" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="24" font-weight="800" letter-spacing="-0.5" fill="#F8FAFC">
+    Awaz
+  </text>
+
+  <!-- Platform Descriptor -->
+  <text x="60" y="41" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="8.5" font-weight="700" letter-spacing="1.2" fill="#94A3B8">
+    PUBLIC CONSUMER EVIDENCE
+  </text>
+</svg>

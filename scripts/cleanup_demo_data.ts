@@ -63,6 +63,27 @@ async function cleanupDemoData() {
     select: { id: true, targetId: true, action: true },
   });
 
+  // 7. Identify Seeded Demo Issue Updates (fake timeline posts referencing 30+ reports or mock escalation)
+  const demoUpdates = await prisma.issueUpdate.findMany({
+    where: {
+      OR: [
+        { publicContent: { contains: "Over 30 consumer reports" } },
+        { publicContent: { contains: "Consolidated Escalation Pack" } },
+      ],
+    },
+    select: { id: true, updateType: true, publicContent: true },
+  });
+  const demoUpdateIds = demoUpdates.map((u) => u.id);
+
+  // 8. Identify Seeded Demo Campaigns
+  const demoCampaigns = await prisma.actionCampaign.findMany({
+    where: {
+      id: { startsWith: "demo-" },
+    },
+    select: { id: true, title: true },
+  });
+  const demoCampaignIds = demoCampaigns.map((c) => c.id);
+
   console.log("Records identified for cleanup:");
   console.log(`- Evidence items:        ${demoEvidence.length}`);
   console.log(`- Moderation actions:    ${demoModActions.length}`);
@@ -70,6 +91,8 @@ async function cleanupDemoData() {
   console.log(`- Complaint reports:     ${demoReports.length} (${demoReports.map((r) => r.referenceNumber).join(", ")})`);
   console.log(`- Daily snapshots:       ${demoSnapshots.length}`);
   console.log(`- Demo citizen users:    ${demoUsers.length} (${demoUsers.map((u) => u.email).join(", ")})`);
+  console.log(`- Demo issue updates:    ${demoUpdates.length}`);
+  console.log(`- Demo campaigns:        ${demoCampaigns.length}`);
 
   console.log("\nRecords strictly preserved:");
   console.log("- Core Issues (catalog): 3 (flipkart-delayed-delivery, etc.)");
@@ -118,6 +141,16 @@ async function cleanupDemoData() {
       where: { id: { in: demoUserIds } },
     });
 
+    // 7. Demo Issue Updates
+    const deletedUpdates = await tx.issueUpdate.deleteMany({
+      where: { id: { in: demoUpdateIds } },
+    });
+
+    // 8. Demo Campaigns
+    const deletedCampaigns = await tx.actionCampaign.deleteMany({
+      where: { id: { in: demoCampaignIds } },
+    });
+
     return {
       deletedEvidence: deletedEvidence.count,
       deletedModActions: deletedModActions.count,
@@ -125,6 +158,8 @@ async function cleanupDemoData() {
       deletedSnapshots: deletedSnapshots.count,
       deletedReports: deletedReports.count,
       deletedUsers: deletedUsers.count,
+      deletedUpdates: deletedUpdates.count,
+      deletedCampaigns: deletedCampaigns.count,
     };
   });
 
@@ -135,6 +170,8 @@ async function cleanupDemoData() {
   console.log(`  - Deleted ${results.deletedSnapshots} daily snapshots`);
   console.log(`  - Deleted ${results.deletedReports} demo complaint reports`);
   console.log(`  - Deleted ${results.deletedUsers} demo citizen accounts`);
+  console.log(`  - Deleted ${results.deletedUpdates} demo issue updates`);
+  console.log(`  - Deleted ${results.deletedCampaigns} demo campaigns`);
   console.log("\nDatabase is now clean and ready for genuine public beta submissions.\n");
 
   await prisma.$disconnect();

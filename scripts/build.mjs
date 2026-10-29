@@ -6,7 +6,7 @@ process.env.NODE_ENV = "production";
 
 console.log("[Awaz Build] Executing next build with NODE_ENV=production...");
 try {
-  execSync("next build", {
+  execSync("npx --no-install next build", {
     stdio: "inherit",
     env: {
       ...process.env,
