@@ -16,17 +16,33 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://awaz.suvidhatools.in";
+
 export const metadata: Metadata = {
-  title: "Awaz — Independent Public Consumer Evidence Platform",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Awaz | Public Consumer Issue Tracker India",
+    template: "%s | Awaz",
+  },
   description:
-    "One issue. Many voices. Visible evidence. An independent public-interest platform turning isolated consumer delivery issues into credible aggregated evidence and collective accountability.",
-  keywords:
-    "consumer complaints, delivery delay, Flipkart grievance, consumer rights India, evidence-backed complaints, collective action",
-  authors: [{ name: "Awaz Public Interest Initiative" }],
+    "Share consumer experiences, explore reported issues, and follow publicly documented progress. Awaz is an independent platform, not a government grievance service.",
+  keywords: [
+    "consumer complaints",
+    "delivery delay",
+    "Flipkart grievance",
+    "consumer rights India",
+    "evidence-backed complaints",
+    "consumer tracker",
+  ],
+  authors: [{ name: "Awaz Independent Public Initiative" }],
+  alternates: {
+    canonical: "./",
+  },
   openGraph: {
-    title: "Awaz — Independent Public Consumer Evidence Platform",
-    description: "One issue. Many voices. Visible evidence.",
-    url: process.env.NEXT_PUBLIC_APP_URL || "https://awaz.org",
+    title: "Awaz | Public Consumer Issue Tracker India",
+    description:
+      "Share consumer experiences, explore reported issues, and follow publicly documented progress. Awaz is an independent platform, not a government grievance service.",
+    url: siteUrl,
     siteName: "Awaz",
     locale: "en_IN",
     type: "website",
