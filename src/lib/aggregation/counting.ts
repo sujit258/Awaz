@@ -31,12 +31,17 @@ export async function getAggregateStats(options?: {
   issueId?: string;
   startDate?: Date;
   endDate?: Date;
+  includeDemo?: boolean;
 }): Promise<AggregateStats> {
   const whereClause: Record<string, unknown> = {
     verificationStatus: {
       not: "REJECTED",
     },
   };
+
+  if (options?.includeDemo !== true && process.env.DEMO_MODE !== "true") {
+    whereClause.isDemo = false;
+  }
 
   if (options?.issueId) {
     whereClause.issueId = options.issueId;
@@ -135,7 +140,8 @@ export async function getAggregateStats(options?: {
  */
 export async function getDailyTrends(
   days: 7 | 30 = 30,
-  issueId?: string
+  issueId?: string,
+  includeDemo?: boolean
 ): Promise<DailyTrendPoint[]> {
   const now = new Date();
   const startDate = startOfDay(subDays(now, days - 1));
@@ -144,6 +150,10 @@ export async function getDailyTrends(
     createdAt: { gte: startDate },
     verificationStatus: { not: "REJECTED" },
   };
+
+  if (includeDemo !== true && process.env.DEMO_MODE !== "true") {
+    whereClause.isDemo = false;
+  }
 
   if (issueId) {
     whereClause.issueId = issueId;

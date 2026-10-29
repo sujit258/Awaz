@@ -49,15 +49,25 @@ export async function GET(
     // 2. 30-day and 7-day trends for this issue
     const trends30 = await getDailyTrends(30, issue.id);
 
+    const isProduction = process.env.DEMO_MODE !== "true";
+
     // 3. First and latest report dates
     const [firstReport, latestReport] = await Promise.all([
       prisma.complaintReport.findFirst({
-        where: { issueId: issue.id, verificationStatus: { not: "REJECTED" } },
+        where: {
+          issueId: issue.id,
+          verificationStatus: { not: "REJECTED" },
+          ...(isProduction ? { isDemo: false } : {}),
+        },
         orderBy: { createdAt: "asc" },
         select: { createdAt: true },
       }),
       prisma.complaintReport.findFirst({
-        where: { issueId: issue.id, verificationStatus: { not: "REJECTED" } },
+        where: {
+          issueId: issue.id,
+          verificationStatus: { not: "REJECTED" },
+          ...(isProduction ? { isDemo: false } : {}),
+        },
         orderBy: { createdAt: "desc" },
         select: { createdAt: true },
       }),
@@ -70,6 +80,7 @@ export async function GET(
         issueId: issue.id,
         verificationStatus: { not: "REJECTED" },
         approximateRegion: { not: null },
+        ...(isProduction ? { isDemo: false } : {}),
       },
       _count: { id: true },
       orderBy: { _count: { id: "desc" } },

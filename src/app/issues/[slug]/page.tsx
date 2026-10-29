@@ -164,12 +164,12 @@ function IssueDetailContent() {
               <div className="flex flex-wrap items-center gap-4 text-xs text-[#5B6573] pt-1">
                 <span className="flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-[#5B6573]" />
-                  Earliest Report: {firstReportDate ? format(new Date(firstReportDate), "MMM d, yyyy") : "N/A"}
+                  Earliest Report: {firstReportDate ? format(new Date(firstReportDate), "MMM d, yyyy") : "Awaiting first submission"}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5 text-[#5B6573]" />
-                  Latest Report: {latestReportDate ? format(new Date(latestReportDate), "MMM d, yyyy") : "N/A"}
+                  Latest Report: {latestReportDate ? format(new Date(latestReportDate), "MMM d, yyyy") : "Awaiting first submission"}
                 </span>
               </div>
             </div>
@@ -322,7 +322,9 @@ function IssueDetailContent() {
                 Anonymized complaint volume by state or union territory:
               </p>
               {regions.length === 0 ? (
-                <p className="text-xs text-[#5B6573] py-2">No regional data specified.</p>
+                <p className="text-xs text-[#5B6573] py-2">
+                  No regional reports logged yet. Reports will appear grouped by Indian state as consumers file verified submissions.
+                </p>
               ) : (
                 <div className="space-y-2">
                   {regions.map((r) => (

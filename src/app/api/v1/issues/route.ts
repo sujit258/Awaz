@@ -24,6 +24,8 @@ export async function GET(req: NextRequest) {
       ];
     }
 
+    const isProduction = process.env.DEMO_MODE !== "true";
+
     const issues = await prisma.issue.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -31,7 +33,10 @@ export async function GET(req: NextRequest) {
         _count: {
           select: {
             reports: {
-              where: { verificationStatus: { not: "REJECTED" } },
+              where: {
+                verificationStatus: { not: "REJECTED" },
+                ...(isProduction ? { isDemo: false } : {}),
+              },
             },
             campaigns: {
               where: { status: "ACTIVE" },
@@ -48,6 +53,7 @@ export async function GET(req: NextRequest) {
           where: {
             issueId: issue.id,
             verificationStatus: { in: ["EVIDENCE_SUBMITTED", "VERIFIED"] },
+            ...(isProduction ? { isDemo: false } : {}),
           },
         });
 
@@ -55,6 +61,7 @@ export async function GET(req: NextRequest) {
           where: {
             issueId: issue.id,
             verificationStatus: { not: "REJECTED" },
+            ...(isProduction ? { isDemo: false } : {}),
           },
           select: { userId: true },
           distinct: ["userId"],

@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
     // 2. Trend points for the selected range
     const trends = await getDailyTrends(trendDays);
 
+    const isProduction = process.env.DEMO_MODE !== "true";
+
     // 3. Trending issues
     const issues = await prisma.issue.findMany({
       where: { publicationStatus: "PUBLISHED" },
@@ -35,7 +37,10 @@ export async function GET(req: NextRequest) {
         _count: {
           select: {
             reports: {
-              where: { verificationStatus: { not: "REJECTED" } },
+              where: {
+                verificationStatus: { not: "REJECTED" },
+                ...(isProduction ? { isDemo: false } : {}),
+              },
             },
             updates: true,
           },
@@ -50,6 +55,7 @@ export async function GET(req: NextRequest) {
           where: {
             issueId: issue.id,
             verificationStatus: { in: ["EVIDENCE_SUBMITTED", "VERIFIED"] },
+            ...(isProduction ? { isDemo: false } : {}),
           },
         });
 
@@ -57,6 +63,7 @@ export async function GET(req: NextRequest) {
           where: {
             issueId: issue.id,
             complaintStatus: "RESOLVED_BY_CUSTOMER",
+            ...(isProduction ? { isDemo: false } : {}),
           },
         });
 
@@ -64,6 +71,7 @@ export async function GET(req: NextRequest) {
           where: {
             issueId: issue.id,
             verificationStatus: { not: "REJECTED" },
+            ...(isProduction ? { isDemo: false } : {}),
           },
           select: { userId: true },
           distinct: ["userId"],

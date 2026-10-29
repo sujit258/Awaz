@@ -160,11 +160,11 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Demo credentials hint for testing */}
-        <div className="rounded-lg bg-[#F7F8FA] border border-[#E1E5EB] p-3 text-[11px] text-[#5B6573] space-y-1">
-          <strong>Demo Credentials for Evaluation:</strong>
-          <p>Citizen: <code className="text-[#17212F]">arun.kumar@example.com</code> / <code className="text-[#17212F]">Password123!</code></p>
-          <p>Admin / Moderator: <code className="text-[#17212F]">admin@awaz.org</code> / <code className="text-[#17212F]">Password123!</code></p>
+        {/* Security & Privacy Notice */}
+        <div className="rounded-lg bg-[#F7F8FA] border border-[#E1E5EB] p-3 text-[11px] text-[#5B6573] text-center">
+          <p>
+            Awaz protects reporter privacy by default. Authentication is encrypted using HTTP-only secure cookies. Passwords are never stored in plain text.
+          </p>
         </div>
       </div>
     </div>

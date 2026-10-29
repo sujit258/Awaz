@@ -1,4 +1,4 @@
-const { execSync } = require("child_process");
+import { execSync } from "node:child_process";
 
 // Enforce standard NODE_ENV for Next.js production builds
 // Prevents React 19 hooks dispatcher from resolving to null during static prerender
