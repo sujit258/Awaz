@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Shield, ExternalLink, HelpCircle, FileText, Lock, Info } from "lucide-react";
+import { ExternalLink, HelpCircle, FileText, Lock, Info } from "lucide-react";
+import AwazLogo from "@/components/brand/AwazLogo";
 
 export default function Footer() {
   return (
@@ -55,12 +56,9 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand & Independence Statement */}
           <div className="md:col-span-2 space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded bg-[#2457D6] text-white">
-                <Shield className="h-4 w-4" />
-              </div>
-              <span className="text-lg font-bold text-[#172B4D]">Awaz</span>
-            </div>
+            <Link href="/" className="inline-block focus:outline-none" aria-label="Awaz - Public Consumer Evidence">
+              <AwazLogo variant="full" size={34} />
+            </Link>
             <p className="text-sm leading-relaxed text-[#5B6573] max-w-md">
               Awaz is an independent, public-interest customer complaint platform. We help consumers
               turn isolated issues into credible, aggregated evidence and constructive collective action.

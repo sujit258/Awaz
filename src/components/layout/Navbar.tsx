@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Shield, Menu, X, User as UserIcon, LogOut, ChevronRight } from "lucide-react";
+import { Menu, X, User as UserIcon, LogOut, ChevronRight } from "lucide-react";
+import AwazLogo from "@/components/brand/AwazLogo";
 
 interface SessionUser {
   id: string;
@@ -60,15 +61,13 @@ export default function Navbar() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand */}
         <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center gap-2.5 text-[#172B4D] focus:outline-none">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#2457D6] text-white shadow-sm">
-              <Shield className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="text-xl font-bold tracking-tight text-[#172B4D]">Awaz</span>
-              <span className="hidden sm:inline-block ml-2 text-xs font-medium text-[#5B6573] border-l border-[#E1E5EB] pl-2">
-                Public Consumer Evidence
-              </span>
+          <Link href="/" className="flex items-center focus:outline-none" aria-label="Awaz - Public Consumer Evidence">
+            {/* Desktop: Full brand lockup */}
+            <AwazLogo variant="full" size={38} className="hidden sm:block" />
+            {/* Mobile: Compact icon + brand mark */}
+            <div className="flex sm:hidden items-center gap-2">
+              <AwazLogo variant="icon" size={32} />
+              <span className="text-xl font-extrabold tracking-tight text-[#17212F]">Awaz</span>
             </div>
           </Link>
 

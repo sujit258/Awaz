@@ -38,6 +38,17 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "./",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   openGraph: {
     title: "Awaz | Public Consumer Issue Tracker India",
     description:
@@ -46,6 +57,21 @@ export const metadata: Metadata = {
     siteName: "Awaz",
     locale: "en_IN",
     type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Awaz — One issue. Many voices. Visible evidence.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Awaz | Public Consumer Issue Tracker India",
+    description:
+      "Share consumer experiences, explore reported issues, and follow publicly documented progress. Awaz is an independent platform, not a government grievance service.",
+    images: ["/og-image.png"],
   },
 };
 
