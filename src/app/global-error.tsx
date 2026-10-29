@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 export default function GlobalError({
   reset,
 }: {
@@ -10,9 +8,6 @@ export default function GlobalError({
 }) {
   return (
     <html lang="en">
-      <head>
-        <title>Application Error | Awaz</title>
-      </head>
       <body
         style={{
           margin: 0,
@@ -74,7 +69,7 @@ export default function GlobalError({
               lineHeight: 1.5,
             }}
           >
-            A critical error occurred while rendering the page. You can try refreshing
+            A critical error occurred while loading this page. You can try refreshing
             or navigate back to the dashboard.
           </p>
           <div
