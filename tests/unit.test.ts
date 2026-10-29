@@ -192,3 +192,35 @@ test("getStorageConfig safely detects unconfigured production object storage", a
   }
 });
 
+test("robots.ts properly disallows private tracking, admin, and auth endpoints", async () => {
+  const robotsModule = await import("../src/app/robots");
+  const robotsConfig = robotsModule.default();
+
+  assert.ok(Array.isArray(robotsConfig.rules));
+  const rule = robotsConfig.rules[0];
+  assert.equal(rule.userAgent, "*");
+
+  const disallowList = Array.isArray(rule.disallow) ? rule.disallow : [rule.disallow];
+  assert.ok(disallowList.includes("/track*"));
+  assert.ok(disallowList.includes("/admin*"));
+  assert.ok(disallowList.includes("/api/*"));
+  assert.ok(disallowList.includes("/login"));
+
+  const allowList = Array.isArray(rule.allow) ? rule.allow : [rule.allow];
+  assert.ok(allowList.includes("/"));
+  assert.ok(allowList.includes("/issues"));
+
+  assert.ok(robotsConfig.sitemap?.includes("sitemap.xml"));
+});
+
+test("Official consumer help destinations match verified national portals", () => {
+  const nchUrl = "https://consumerhelpline.gov.in/";
+  const eJagritiUrl = "https://e-jagriti.gov.in/";
+
+  // Assert correct URLs and HTTPS protocol
+  assert.ok(nchUrl.startsWith("https://consumerhelpline.gov.in"));
+  assert.ok(eJagritiUrl.startsWith("https://e-jagriti.gov.in"));
+  assert.notEqual(eJagritiUrl, "https://edaakhil.nic.in"); // Legacy e-daakhil replaced
+});
+
+

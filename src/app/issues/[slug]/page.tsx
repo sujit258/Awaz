@@ -207,48 +207,56 @@ function IssueDetailContent() {
 
       {/* Main Content Layout */}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-10">
+        {/* Non-Governmental Independence & Allegation Disclaimer */}
+        <div className="rounded-lg border border-[#E1E5EB] bg-[#F7F8FA] p-3 text-xs text-[#5B6573] flex items-start gap-2">
+          <HelpCircle className="h-4 w-4 text-[#087E8B] shrink-0 mt-0.5" />
+          <span>
+            <strong>Public Documentation Notice: </strong> Submissions reflect consumers&apos; stated experiences and allegations under our public methodology. They are not judicial findings, government orders, or company-wide statistics.
+          </span>
+        </div>
+
         {/* Statistics Grid */}
         <section aria-labelledby="issue-stats">
           <h2 id="issue-stats" className="text-sm font-semibold uppercase tracking-wider text-[#5B6573] mb-3">
-            Grievance Statistics & Evidence Verification
+            Issue Evidence Metrics
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              label="Total Complaints"
+              label="Eligible Reports"
               value={stats ? stats.totalReports : 0}
-              definition="Total eligible customer submissions under this specific issue category."
-              subtext="Excludes rejected and duplicate reports"
+              definition="Total eligible customer submissions under this specific issue category, excluding duplicate or withdrawn records."
+              subtext="Real consumer grievance records"
               icon={<FileText className="h-4 w-4" />}
             />
 
             <StatCard
               label="Unique Reporters"
               value={stats ? stats.uniqueReporters : 0}
-              definition="Distinct individual verified accounts reporting this issue."
+              definition="Distinct registered user accounts and anonymous filing consumers reporting this issue."
               subtext="Independent consumer submissions"
               icon={<Users className="h-4 w-4" />}
             />
 
             <StatCard
-              label="Verified Evidence"
+              label="Evidence Submitted"
               value={stats ? stats.evidenceBackedReports : 0}
-              definition="Reports corroborated by order screenshots, tracking logs, or correspondence."
+              definition="Reports where the consumer voluntarily attached tracking screenshots, receipts, or courier correspondence."
               subtext={
                 stats && stats.totalReports > 0
-                  ? `${Math.round((stats.evidenceBackedReports / stats.totalReports) * 100)}% evidence-backed`
-                  : "Private by default"
+                  ? `${Math.round((stats.evidenceBackedReports / stats.totalReports) * 100)}% of reported cases`
+                  : "Private & optional"
               }
               icon={<ShieldCheck className="h-4 w-4 text-[#087E8B]" />}
             />
 
             <StatCard
-              label="Customer Resolutions"
+              label="Reported Resolutions"
               value={stats ? stats.reportedResolutions : 0}
-              definition="Reports where the affected customer verified receipt, replacement, or refund."
+              definition="Complaints where the reporting customer explicitly confirmed delivery fulfillment, replacement, or dispute settlement."
               subtext={
                 stats && stats.totalReports > 0
-                  ? `${stats.resolutionRatePct}% resolution rate`
-                  : "Confirmed by citizen"
+                  ? `${stats.resolutionRatePct}% confirmed by customer`
+                  : "Confirmed by reporter"
               }
               icon={<CheckCircle2 className="h-4 w-4 text-[#18794E]" />}
             />

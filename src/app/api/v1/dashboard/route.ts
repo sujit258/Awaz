@@ -49,35 +49,60 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Compute evidence stats per issue
+    // Compute accurate stats per issue
     const enhancedIssues = await Promise.all(
       issues.map(async (issue) => {
-        const evidenceCount = await prisma.complaintReport.count({
-          where: {
-            issueId: issue.id,
-            isDeleted: false,
-            verificationStatus: { in: ["EVIDENCE_SUBMITTED", "VERIFIED"] },
-            ...(isProduction ? { isDemo: false } : {}),
-          },
-        });
+        const [evidenceCount, resolvedCount, registeredReporters, anonReporters, latestReport] =
+          await Promise.all([
+            prisma.complaintReport.count({
+              where: {
+                issueId: issue.id,
+                isDeleted: false,
+                verificationStatus: { in: ["EVIDENCE_SUBMITTED", "VERIFIED"] },
+                ...(isProduction ? { isDemo: false } : {}),
+              },
+            }),
+            prisma.complaintReport.count({
+              where: {
+                issueId: issue.id,
+                isDeleted: false,
+                complaintStatus: "RESOLVED_BY_CUSTOMER",
+                ...(isProduction ? { isDemo: false } : {}),
+              },
+            }),
+            prisma.complaintReport.findMany({
+              where: {
+                issueId: issue.id,
+                isDeleted: false,
+                userId: { not: null },
+                verificationStatus: { not: "REJECTED" },
+                ...(isProduction ? { isDemo: false } : {}),
+              },
+              select: { userId: true },
+              distinct: ["userId"],
+            }),
+            prisma.complaintReport.count({
+              where: {
+                issueId: issue.id,
+                isDeleted: false,
+                userId: null,
+                verificationStatus: { not: "REJECTED" },
+                ...(isProduction ? { isDemo: false } : {}),
+              },
+            }),
+            prisma.complaintReport.findFirst({
+              where: {
+                issueId: issue.id,
+                isDeleted: false,
+                verificationStatus: { not: "REJECTED" },
+                ...(isProduction ? { isDemo: false } : {}),
+              },
+              orderBy: { createdAt: "desc" },
+              select: { createdAt: true },
+            }),
+          ]);
 
-        const resolvedCount = await prisma.complaintReport.count({
-          where: {
-            issueId: issue.id,
-            complaintStatus: "RESOLVED_BY_CUSTOMER",
-            ...(isProduction ? { isDemo: false } : {}),
-          },
-        });
-
-        const uniqueReporters = await prisma.complaintReport.findMany({
-          where: {
-            issueId: issue.id,
-            verificationStatus: { not: "REJECTED" },
-            ...(isProduction ? { isDemo: false } : {}),
-          },
-          select: { userId: true },
-          distinct: ["userId"],
-        });
+        const uniqueReportersCount = registeredReporters.length + anonReporters;
 
         return {
           id: issue.id,
@@ -90,10 +115,11 @@ export async function GET(req: NextRequest) {
           publishedAt: issue.publishedAt,
           updatedAt: issue.updatedAt,
           totalReports: issue._count.reports,
-          uniqueReporters: uniqueReporters.length,
+          uniqueReporters: uniqueReportersCount,
           evidenceBackedReports: evidenceCount,
           reportedResolved: resolvedCount,
           updateCount: issue._count.updates,
+          latestReportAt: latestReport?.createdAt ? latestReport.createdAt.toISOString() : null,
         };
       })
     );
@@ -123,10 +149,14 @@ export async function GET(req: NextRequest) {
       where: { isDemo: true },
     });
 
+    const activeReportedIssues = enhancedIssues.filter((i) => i.totalReports > 0);
+
     return NextResponse.json({
       stats,
       trends,
       trendRange: trendDays,
+      activeReportedIssues,
+      trackedCategories: enhancedIssues,
       trendingIssues: enhancedIssues,
       latestUpdates,
       hasDemoData: demoReportCount > 0,

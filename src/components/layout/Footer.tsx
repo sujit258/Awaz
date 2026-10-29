@@ -9,35 +9,42 @@ export default function Footer() {
       {/* Official Grievance Resources Banner */}
       <div className="border-b border-[#E1E5EB] bg-[#F7F8FA] py-5">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
-            <div className="flex items-start gap-2">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs">
+            <div className="flex items-start gap-2 max-w-3xl">
               <HelpCircle className="h-4 w-4 text-[#087E8B] shrink-0 mt-0.5" />
               <div>
-                <span className="font-semibold text-[#17212F]">Official Grievance Channels: </span>
-                <span>
-                  For urgent consumer disputes in India, contact the National Consumer Helpline at{" "}
-                  <strong className="text-[#17212F]">1915</strong> (Toll Free) or file at{" "}
-                  <a
-                    href="https://consumerhelpline.gov.in"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline text-[#2457D6] hover:text-[#1B44AA] inline-flex items-center gap-0.5"
-                  >
-                    consumerhelpline.gov.in <ExternalLink className="h-3 w-3" />
-                  </a>.
+                <span className="font-semibold text-[#17212F]">Official Government Recourse (India): </span>
+                <span className="text-[#5B6573]">
+                  Awaz is an independent documentation platform, not a government service. For official dispute resolution:
                 </span>
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span>
+                    <strong>Informal Grievance Mediation: </strong>
+                    National Consumer Helpline (NCH){" "}
+                    <strong className="text-[#17212F]">1915</strong> (Toll Free) or{" "}
+                    <a
+                      href="https://consumerhelpline.gov.in/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline text-[#2457D6] hover:text-[#1B44AA] inline-flex items-center gap-0.5"
+                    >
+                      consumerhelpline.gov.in <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </span>
+                  <span>
+                    <strong>Statutory Commission Filing: </strong>
+                    <a
+                      href="https://e-jagriti.gov.in/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline text-[#2457D6] hover:text-[#1B44AA] inline-flex items-center gap-0.5"
+                    >
+                      e-Jagriti Consumer Commission Portal <ExternalLink className="h-3 w-3" />
+                    </a>{" "}
+                    (District/State/National Commissions)
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="text-[#5B6573] shrink-0">
-              Dispute Redressal:{" "}
-              <a
-                href="https://edaakhil.nic.in"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline text-[#2457D6] hover:text-[#1B44AA]"
-              >
-                e-Daakhil Portal
-              </a>
             </div>
           </div>
         </div>
