@@ -20,14 +20,8 @@ export const metadata: Metadata = {
   title: "Awaz — Independent Public Consumer Evidence Platform",
   description:
     "One issue. Many voices. Visible evidence. An independent public-interest platform turning isolated consumer delivery issues into credible aggregated evidence and collective accountability.",
-  keywords: [
-    "consumer complaints",
-    "delivery delay",
-    "Flipkart grievance",
-    "consumer rights India",
-    "evidence-backed complaints",
-    "collective action",
-  ],
+  keywords:
+    "consumer complaints, delivery delay, Flipkart grievance, consumer rights India, evidence-backed complaints, collective action",
   authors: [{ name: "Awaz Public Interest Initiative" }],
   openGraph: {
     title: "Awaz — Independent Public Consumer Evidence Platform",
