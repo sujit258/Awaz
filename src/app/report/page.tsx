@@ -898,7 +898,7 @@ export default function ReportPage() {
 
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
-                href={`/track?ref=${submissionResult.referenceNumber}${submissionResult.accessKey ? `&key=${submissionResult.accessKey}` : ""}`}
+                href={`/track?ref=${submissionResult.referenceNumber}`}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#2457D6] px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#1B44AA]"
               >
                 <Eye className="h-4 w-4" />

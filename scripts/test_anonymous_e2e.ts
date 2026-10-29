@@ -50,17 +50,32 @@ async function main() {
   }
   console.log("✅ Public lookup strictly returned unauthenticated projection (no private description).");
 
-  // 3. Test Authorized Lookup (With Key)
+  // 3. Test Authorized Lookup (With Key via Protected Header)
   const authRes = await fetch(
-    `http://localhost:3000/api/v1/reports/track?ref=${encodeURIComponent(referenceNumber)}&accessKey=${encodeURIComponent(accessKey)}`
+    `http://localhost:3000/api/v1/reports/track?ref=${encodeURIComponent(referenceNumber)}`,
+    {
+      headers: {
+        "x-awaz-access-key": accessKey,
+      },
+    }
   );
   const authData = await authRes.json();
-  console.log("Authorized lookup (with key):", authData);
+  console.log("Authorized lookup (with header key):", authData);
 
   if (!authData.isAuthorized || !authData.report?.description) {
     throw new Error("Authorized lookup failed to retrieve owner details!");
   }
-  console.log("✅ Authorized lookup verified accessKey and returned owner report.");
+  console.log("✅ Authorized lookup verified x-awaz-access-key header and returned owner report.");
+
+  // 3b. Verify query parameter transport NEVER authorizes private access
+  const queryParamRes = await fetch(
+    `http://localhost:3000/api/v1/reports/track?ref=${encodeURIComponent(referenceNumber)}&accessKey=${encodeURIComponent(accessKey)}`
+  );
+  const queryParamData = await queryParamRes.json();
+  if (queryParamData.isAuthorized !== false) {
+    throw new Error("Security failure: Query parameter transport unexpectedly authorized access!");
+  }
+  console.log("✅ Confirmed: Query parameter accessKey is ignored and does NOT authorize private access.");
 
   // 4. Test Status Update via Access Key
   const updateRes = await fetch(`http://localhost:3000/api/v1/reports/${id}`, {

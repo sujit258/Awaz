@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { EvidenceUploadSchema } from "@/lib/validation/schemas";
 import { verifyAccessKey } from "@/lib/auth/access-key";
+import { getStorageConfig } from "@/lib/storage/evidence-purge";
 import { randomUUID } from "crypto";
 
 export async function POST(
@@ -33,7 +34,7 @@ export async function POST(
     }
 
     if (!isAuthorized) {
-      const providedKey = req.headers.get("x-awaz-access-key") || req.nextUrl.searchParams.get("accessKey");
+      const providedKey = req.headers.get("x-awaz-access-key")?.trim();
       if (providedKey && report.accessKeyHash) {
         if (verifyAccessKey(providedKey, report.accessKeyHash)) {
           isAuthorized = true;
@@ -43,6 +44,18 @@ export async function POST(
 
     if (!isAuthorized) {
       return NextResponse.json({ error: "Access denied. Valid login or report access key required." }, { status: 403 });
+    }
+
+    // Safety guard: Ensure private object storage is configured before accepting uploads
+    const storageConfig = getStorageConfig();
+    if (!storageConfig.isConfigured) {
+      return NextResponse.json(
+        {
+          error: "Evidence uploads are currently paused because private object storage is not configured for this environment. Reports remain eligible without evidence.",
+          storageConfigured: false,
+        },
+        { status: 503 }
+      );
     }
 
     const body = await req.json();

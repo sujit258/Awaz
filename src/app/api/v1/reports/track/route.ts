@@ -3,11 +3,11 @@ import { prisma } from "@/lib/db/prisma";
 import { verifyAccessKey } from "@/lib/auth/access-key";
 import { toPublicReportDTO, toOwnerReportDTO } from "@/lib/dto/report";
 import { checkRateLimit } from "@/lib/antispam/rate-limit";
+import { getTrustedClientIp } from "@/lib/antispam/ip";
 
 export async function GET(req: NextRequest) {
   try {
-    const forwarded = req.headers.get("x-forwarded-for");
-    const clientIp = (forwarded ? forwarded.split(",")[0] : req.headers.get("x-real-ip"))?.trim() || "unknown";
+    const clientIp = getTrustedClientIp(req);
 
     // Rate limit lookups: 20 per minute per IP to prevent enumeration
     const rateCheck = checkRateLimit(`track:${clientIp}`, 20, 60_000);
@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const ref = searchParams.get("ref")?.trim();
-    const accessKey = searchParams.get("accessKey")?.trim() || req.headers.get("x-awaz-access-key")?.trim();
+    // Header-only transport: NEVER accept access keys in query parameters
+    const accessKey = req.headers.get("x-awaz-access-key")?.trim();
 
     if (!ref) {
       return NextResponse.json(

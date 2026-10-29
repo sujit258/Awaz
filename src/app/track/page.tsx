@@ -54,12 +54,14 @@ function TrackContent() {
     setUpdateSuccess(false);
 
     try {
-      let url = `/api/v1/reports/track?ref=${encodeURIComponent(ref)}`;
+      const headers: Record<string, string> = {};
       if (key) {
-        url += `&accessKey=${encodeURIComponent(key)}`;
+        headers["x-awaz-access-key"] = key;
       }
 
-      const res = await fetch(url);
+      const res = await fetch(`/api/v1/reports/track?ref=${encodeURIComponent(ref)}`, {
+        headers,
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -88,12 +90,23 @@ function TrackContent() {
 
   useEffect(() => {
     let ignore = false;
+
+    // Redact key from browser URL and history if user followed a legacy link
+    if (typeof window !== "undefined" && window.location.search.includes("key=")) {
+      const cleanUrl = window.location.pathname + (initialRef ? `?ref=${encodeURIComponent(initialRef)}` : "");
+      window.history.replaceState(null, "", cleanUrl);
+    }
+
     if (initialRef) {
       const fetchInitial = async () => {
         try {
-          let url = `/api/v1/reports/track?ref=${encodeURIComponent(initialRef)}`;
-          if (initialKey) url += `&accessKey=${encodeURIComponent(initialKey)}`;
-          const res = await fetch(url);
+          const headers: Record<string, string> = {};
+          if (initialKey) {
+            headers["x-awaz-access-key"] = initialKey;
+          }
+          const res = await fetch(`/api/v1/reports/track?ref=${encodeURIComponent(initialRef)}`, {
+            headers,
+          });
           const data = await res.json();
           if (ignore) return;
           if (res.ok) {

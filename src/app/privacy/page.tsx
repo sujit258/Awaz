@@ -136,6 +136,17 @@ export default function PrivacyNoticePage() {
             Awaz is an independent advocacy database and does not provide legal representation or binding arbitration. To file an official complaint against a retail company in India, you may contact the National Consumer Helpline at <strong>1915</strong> or file on the government portal at <a href="https://consumerhelpline.gov.in" target="_blank" rel="noopener noreferrer" className="underline text-[#2457D6]">consumerhelpline.gov.in</a>.
           </p>
         </section>
+
+        {/* Section 8: Legal Disclaimer */}
+        <section className="rounded-lg border border-[#D97706]/30 bg-[#FFFBEB] p-4 text-xs space-y-2 text-[#92400E]">
+          <h2 className="font-bold text-[#78350F] flex items-center gap-1.5">
+            <Shield className="h-4 w-4" />
+            <span>8. Legal Notice &amp; Compliance Disclaimer</span>
+          </h2>
+          <p>
+            The data protection architecture and privacy practices described herein reflect software engineering controls designed for consumer privacy. They do not constitute formal legal advice, nor do they represent a certified audit under the Digital Personal Data Protection Act, 2023 (DPDP) or other applicable jurisdiction laws. Formal compliance affirmations and terms require independent review by qualified legal counsel.
+          </p>
+        </section>
       </div>
     </div>
   );

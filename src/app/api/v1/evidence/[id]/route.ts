@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { verifyAccessKey } from "@/lib/auth/access-key";
+import { getStorageConfig } from "@/lib/storage/evidence-purge";
 
 export async function GET(
   req: NextRequest,
@@ -42,7 +43,8 @@ export async function GET(
     }
 
     if (!isAuthorized) {
-      const providedKey = req.headers.get("x-awaz-access-key") || req.nextUrl.searchParams.get("accessKey");
+      // Header-only transport: NEVER accept access keys in query parameters
+      const providedKey = req.headers.get("x-awaz-access-key")?.trim();
       if (providedKey && evidence.complaintReport.accessKeyHash) {
         if (verifyAccessKey(providedKey, evidence.complaintReport.accessKeyHash)) {
           isAuthorized = true;
@@ -54,6 +56,8 @@ export async function GET(
       return NextResponse.json({ error: "Access denied to private evidence." }, { status: 403 });
     }
 
+    const storageConfig = getStorageConfig();
+
     return NextResponse.json({
       id: evidence.id,
       fileName: evidence.fileName,
@@ -64,7 +68,8 @@ export async function GET(
       reviewNote: evidence.reviewNote,
       reportReference: evidence.complaintReport.referenceNumber,
       uploadedAt: evidence.createdAt,
-      accessUrl: `/api/v1/evidence/${evidence.id}/stream`,
+      storageConfigured: storageConfig.isConfigured,
+      downloadAvailable: storageConfig.isConfigured,
     });
   } catch (error) {
     console.error("Evidence fetch error:", error);

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { ReportStatusUpdateSchema, ReportDeletionSchema } from "@/lib/validation/schemas";
 import { verifyAccessKey } from "@/lib/auth/access-key";
 import { toOwnerReportDTO } from "@/lib/dto/report";
+import { purgeEvidenceForReport } from "@/lib/storage/evidence-purge";
 
 // Helper to authorize request via Session User OR Anonymous Access Key
 async function isAuthorizedForReport(
@@ -25,8 +26,8 @@ async function isAuthorizedForReport(
     }
   }
 
-  // 2. Check anonymous access key from header or query param
-  const providedKey = req.headers.get("x-awaz-access-key") || req.nextUrl.searchParams.get("accessKey");
+  // 2. Check anonymous access key STRICTLY from protected request header
+  const providedKey = req.headers.get("x-awaz-access-key")?.trim();
   if (providedKey && report.accessKeyHash) {
     const isValid = verifyAccessKey(providedKey, report.accessKeyHash);
     if (isValid) {
@@ -193,10 +194,8 @@ export async function DELETE(
       );
     }
 
-    // Dependency-aware purge of associated private evidence files to honor data retention
-    await prisma.evidence.deleteMany({
-      where: { complaintReportId: report.id },
-    });
+    // Dependency-aware, observable purge of associated private evidence files
+    const purgeResult = await purgeEvidenceForReport(report.id, auth.actorId);
 
     // Soft-delete complaint report and scrub personal identifiers
     const deletedReport = await prisma.complaintReport.update({
@@ -228,7 +227,11 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: "Report successfully withdrawn and private evidence removed in compliance with data protection policies.",
+      message: purgeResult.unpurgedCount === 0
+        ? "Report successfully withdrawn and private evidence removed in compliance with data protection policies."
+        : "Report withdrawn. Some evidence objects are queued for background retry.",
+      purgedFiles: purgeResult.purgedCount,
+      unpurgedFiles: purgeResult.unpurgedCount,
     });
   } catch (error) {
     console.error("Delete report error:", error);
