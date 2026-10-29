@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
           select: {
             reports: {
               where: {
+                isDeleted: false,
                 verificationStatus: { not: "REJECTED" },
                 ...(isProduction ? { isDemo: false } : {}),
               },
@@ -54,6 +55,7 @@ export async function GET(req: NextRequest) {
         const evidenceCount = await prisma.complaintReport.count({
           where: {
             issueId: issue.id,
+            isDeleted: false,
             verificationStatus: { in: ["EVIDENCE_SUBMITTED", "VERIFIED"] },
             ...(isProduction ? { isDemo: false } : {}),
           },

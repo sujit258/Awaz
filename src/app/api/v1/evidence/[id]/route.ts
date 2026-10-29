@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
+import { verifyAccessKey } from "@/lib/auth/access-key";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const { id } = await params;
 
     const evidence = await prisma.evidence.findUnique({
@@ -21,24 +17,43 @@ export async function GET(
           select: {
             id: true,
             userId: true,
+            accessKeyHash: true,
             referenceNumber: true,
+            isDeleted: true,
           },
         },
       },
     });
 
-    if (!evidence) {
-      return NextResponse.json({ error: "Evidence record not found" }, { status: 404 });
+    if (!evidence || evidence.complaintReport.isDeleted) {
+      return NextResponse.json({ error: "Evidence record not found." }, { status: 404 });
     }
 
-    // Authorization: owner or staff only
-    const isOwner = evidence.complaintReport.userId === user.id;
-    const isStaff = user.role === "ADMIN" || user.role === "MODERATOR";
-    if (!isOwner && !isStaff) {
-      return NextResponse.json({ error: "Access denied to private evidence" }, { status: 403 });
+    // Check authorization: User Session OR Report Access Key
+    const user = await getCurrentUser();
+    let isAuthorized = false;
+
+    if (user) {
+      const isOwner = evidence.complaintReport.userId === user.id;
+      const isStaff = user.role === "ADMIN" || user.role === "MODERATOR";
+      if (isOwner || isStaff) {
+        isAuthorized = true;
+      }
     }
 
-    // Return authenticated evidence metadata with secure view token/details
+    if (!isAuthorized) {
+      const providedKey = req.headers.get("x-awaz-access-key") || req.nextUrl.searchParams.get("accessKey");
+      if (providedKey && evidence.complaintReport.accessKeyHash) {
+        if (verifyAccessKey(providedKey, evidence.complaintReport.accessKeyHash)) {
+          isAuthorized = true;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Access denied to private evidence." }, { status: 403 });
+    }
+
     return NextResponse.json({
       id: evidence.id,
       fileName: evidence.fileName,
@@ -49,13 +64,12 @@ export async function GET(
       reviewNote: evidence.reviewNote,
       reportReference: evidence.complaintReport.referenceNumber,
       uploadedAt: evidence.createdAt,
-      // In production with S3/Neon Object storage, this returns an authenticated short-lived signed URL
       accessUrl: `/api/v1/evidence/${evidence.id}/stream`,
     });
   } catch (error) {
     console.error("Evidence fetch error:", error);
     return NextResponse.json(
-      { error: "Failed to access evidence" },
+      { error: "Failed to access evidence." },
       { status: 500 }
     );
   }

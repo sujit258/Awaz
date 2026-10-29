@@ -56,6 +56,7 @@ export async function GET(
       prisma.complaintReport.findFirst({
         where: {
           issueId: issue.id,
+          isDeleted: false,
           verificationStatus: { not: "REJECTED" },
           ...(isProduction ? { isDemo: false } : {}),
         },
@@ -65,6 +66,7 @@ export async function GET(
       prisma.complaintReport.findFirst({
         where: {
           issueId: issue.id,
+          isDeleted: false,
           verificationStatus: { not: "REJECTED" },
           ...(isProduction ? { isDemo: false } : {}),
         },
@@ -78,6 +80,7 @@ export async function GET(
       by: ["approximateRegion"],
       where: {
         issueId: issue.id,
+        isDeleted: false,
         verificationStatus: { not: "REJECTED" },
         approximateRegion: { not: null },
         ...(isProduction ? { isDemo: false } : {}),

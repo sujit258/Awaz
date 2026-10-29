@@ -52,34 +52,51 @@ export const ComplaintSubmissionSchema = z.object({
   issueId: z.string().min(1, "Please select an applicable issue category."),
   companyId: z.literal("flipkart"),
   orderDate: z.string().optional().nullable(),
-  promisedDeliveryDate: z.string().min(1, "Promised delivery date is required."),
+  promisedDeliveryDate: z.string().optional().nullable(),
   orderStatus: z.enum(["AWAITING_DELIVERY", "DELIVERED", "CANCELLED", "UNKNOWN"]).default("AWAITING_DELIVERY"),
   hasMeaningfulUpdate: z.boolean().default(false),
   summary: z
     .string()
     .trim()
-    .min(10, "Summary must be at least 10 characters.")
-    .max(140, "Summary cannot exceed 140 characters."),
+    .max(140, "Summary cannot exceed 140 characters.")
+    .optional()
+    .nullable(),
   description: z
     .string()
     .trim()
-    .min(20, "Please describe your experience in at least 20 characters.")
+    .min(20, "Please provide a factual description of your experience in at least 20 characters.")
     .max(2500, "Description cannot exceed 2500 characters."),
   resolutionOutcome: z.string().trim().max(300).optional().nullable(),
   approximateRegion: z.string().optional().nullable(),
+  orderReference: z.string().trim().max(50).optional().nullable(),
+  contactEmail: z.string().trim().email("Please provide a valid email address.").optional().nullable(),
+  contactPhone: z.string().trim().max(15).optional().nullable(),
   idempotencyKey: z.string().optional().nullable(),
   confirmationAccurate: z.literal(true, {
-    message: "You must confirm the accuracy of your submission.",
+    message: "You must confirm the factual accuracy of your submission.",
   }),
   confirmationConsent: z.literal(true, {
-    message: "You must accept the privacy and evidence policy.",
+    message: "You must accept the public interest evidence and privacy terms.",
   }),
+});
+
+export const AnonymousTrackSchema = z.object({
+  referenceNumber: z.string().trim().min(5, "Valid reference number required."),
+  accessKey: z.string().trim().optional(),
+});
+
+export const ReportDeletionSchema = z.object({
+  confirmDeletion: z.literal(true, {
+    message: "You must confirm the deletion request.",
+  }),
+  reason: z.string().trim().max(300).optional(),
 });
 
 export const ReportStatusUpdateSchema = z.object({
   orderStatus: z.enum(["AWAITING_DELIVERY", "DELIVERED", "CANCELLED", "UNKNOWN"]).optional(),
   complaintStatus: z.enum(["OPEN", "RESOLVED_BY_CUSTOMER", "DISPUTED", "UNDER_REVIEW"]).optional(),
   resolutionOutcome: z.string().trim().max(500).optional().nullable(),
+  hasMeaningfulUpdate: z.boolean().optional(),
 });
 
 export const EvidenceUploadSchema = z.object({

@@ -12,6 +12,11 @@ import {
   FileCheck,
   Lock,
   ExternalLink,
+  Copy,
+  Check,
+  Eye,
+  KeyRound,
+  UserCheck,
 } from "lucide-react";
 import { IndianRegions } from "@/lib/validation/schemas";
 
@@ -37,7 +42,8 @@ export default function ReportPage() {
   const [summary, setSummary] = useState("");
   const [description, setDescription] = useState("");
   const [resolutionOutcome, setResolutionOutcome] = useState("");
-  const [approximateRegion, setApproximateRegion] = useState("Maharashtra");
+  const [approximateRegion, setApproximateRegion] = useState("Other / Not Specified");
+  const [orderReference, setOrderReference] = useState("");
 
   // Evidence state
   const [evidenceFile, setEvidenceFile] = useState<{
@@ -51,21 +57,25 @@ export default function ReportPage() {
   const [confirmationAccurate, setConfirmationAccurate] = useState(false);
   const [confirmationConsent, setConfirmationConsent] = useState(false);
 
-  // Auth requirement
+  // Optional Auth state
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
+  const [showOptionalAuth, setShowOptionalAuth] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Submission state
+  // Submission result state
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<{
     referenceNumber: string;
     id: string;
     verificationStatus: string;
     issueSlug: string;
+    accessKey?: string;
+    isAnonymous: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -100,7 +110,6 @@ export default function ReportPage() {
     setAuthLoading(true);
     setAuthError("");
     try {
-      // Try login first, if fail try register
       let res = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,7 +117,6 @@ export default function ReportPage() {
       });
 
       if (!res.ok) {
-        // Try registration
         res = await fetch("/api/v1/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -121,6 +129,7 @@ export default function ReportPage() {
         setAuthError(data.error || "Authentication failed.");
       } else {
         setUser(data.user);
+        setShowOptionalAuth(false);
       }
     } catch {
       setAuthError("Failed to connect to authentication service.");
@@ -162,13 +171,14 @@ export default function ReportPage() {
         companyId: "flipkart",
         issueId,
         orderDate: orderDate || null,
-        promisedDeliveryDate,
+        promisedDeliveryDate: promisedDeliveryDate || null,
         orderStatus,
         hasMeaningfulUpdate,
-        summary,
+        summary: summary || null,
         description,
         resolutionOutcome: resolutionOutcome || null,
-        approximateRegion,
+        approximateRegion: approximateRegion !== "Other / Not Specified" ? approximateRegion : null,
+        orderReference: orderReference || null,
         idempotencyKey,
         confirmationAccurate,
         confirmationConsent,
@@ -188,12 +198,17 @@ export default function ReportPage() {
         return;
       }
 
-      // If user attached evidence metadata, save it now
+      // If user attached evidence metadata, save it now with anonymous access key if present
       if (evidenceFile && data.report?.id) {
         try {
+          const evidenceHeaders: Record<string, string> = { "Content-Type": "application/json" };
+          if (data.accessKey) {
+            evidenceHeaders["x-awaz-access-key"] = data.accessKey;
+          }
+
           await fetch(`/api/v1/reports/${data.report.id}/evidence`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: evidenceHeaders,
             body: JSON.stringify({
               fileName: evidenceFile.fileName,
               fileType: evidenceFile.fileType,
@@ -206,7 +221,10 @@ export default function ReportPage() {
         }
       }
 
-      setSubmissionResult(data.report);
+      setSubmissionResult({
+        ...data.report,
+        accessKey: data.accessKey,
+      });
       setStep(5);
     } catch {
       setErrorMsg("An unexpected network error occurred while submitting your complaint.");
@@ -215,17 +233,42 @@ export default function ReportPage() {
     }
   }
 
+  function copyAccessKey(key: string) {
+    navigator.clipboard.writeText(key);
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 3000);
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+      {/* Privacy Notice Banner */}
+      <div className="mb-6 rounded-lg bg-[#EDF7F1] border border-[#18794E]/20 p-3.5 text-xs text-[#18794E] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Shield className="h-4 w-4 shrink-0 text-[#18794E]" />
+          <span>
+            <strong>Privacy-First Reporting:</strong> No account or email is required. Private identifiers are never shared publicly.
+          </span>
+        </div>
+        <Link href="/privacy" className="text-xs font-semibold underline shrink-0 hover:text-[#125838]">
+          Privacy Charter
+        </Link>
+      </div>
+
       {/* Progress Stepper */}
       <div className="mb-8">
         <div className="flex items-center justify-between text-xs font-semibold text-[#5B6573] mb-2">
-          <span>Step {step} of 5: {
-            step === 1 ? "Issue Details" :
-            step === 2 ? "Your Experience" :
-            step === 3 ? "Evidence (Optional)" :
-            step === 4 ? "Review & Confirm" : "Confirmation"
-          }</span>
+          <span>
+            Step {step} of 5:{" "}
+            {step === 1
+              ? "Issue Category"
+              : step === 2
+              ? "Your Factual Experience"
+              : step === 3
+              ? "Supporting Evidence (Optional)"
+              : step === 4
+              ? "Review & Submit"
+              : "Confirmation & Access Key"}
+          </span>
           <span>{Math.round((step / 5) * 100)}% Complete</span>
         </div>
         <div className="h-1.5 w-full bg-[#E1E5EB] rounded-full overflow-hidden">
@@ -241,9 +284,9 @@ export default function ReportPage() {
         {step === 1 && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-[#17212F]">Step 1: Order & Issue Details</h2>
+              <h2 className="text-xl font-bold text-[#17212F]">Step 1: Order & Issue Category</h2>
               <p className="text-xs text-[#5B6573] mt-1">
-                Provide factual information about the delayed or unfulfilled order.
+                Select the grievance category. Specific dates are completely optional.
               </p>
             </div>
 
@@ -251,7 +294,7 @@ export default function ReportPage() {
               {/* Company */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-[#5B6573] mb-1">
-                  Company / Retailer
+                  Target Company / Platform
                 </label>
                 <input
                   type="text"
@@ -260,7 +303,7 @@ export default function ReportPage() {
                   className="w-full rounded-lg border border-[#E1E5EB] bg-[#F7F8FA] px-3.5 py-2.5 text-sm text-[#17212F] font-medium"
                 />
                 <span className="text-[11px] text-[#5B6573] mt-1 block">
-                  Awaz is currently focused on Flipkart delivery fulfillment issues in India.
+                  Awaz is currently documenting Flipkart fulfillment and delivery disputes across India.
                 </span>
               </div>
 
@@ -286,21 +329,20 @@ export default function ReportPage() {
                 )}
               </div>
 
-              {/* Promised Delivery Date */}
+              {/* Delivery Dates (Optional) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#17212F] mb-1">
-                    Promised Delivery Date *
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#5B6573] mb-1">
+                    Promised Delivery Date (Optional)
                   </label>
                   <input
                     type="date"
-                    required
                     value={promisedDeliveryDate}
                     onChange={(e) => setPromisedDeliveryDate(e.target.value)}
                     className="w-full rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-2 text-sm text-[#17212F] focus:border-[#2457D6]"
                   />
                   <span className="text-[11px] text-[#5B6573] mt-0.5 block">
-                    The original date Flipkart promised delivery.
+                    Helps calculate delay duration. Leave blank if unsure.
                   </span>
                 </div>
 
@@ -317,10 +359,10 @@ export default function ReportPage() {
                 </div>
               </div>
 
-              {/* Current Order Status */}
+              {/* Order Status */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-[#17212F] mb-1">
-                  Current Order Status *
+                  Current Status of Shipment
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
@@ -356,7 +398,7 @@ export default function ReportPage() {
                   />
                   <div className="text-xs">
                     <span className="font-semibold text-[#17212F]">
-                      Have you received a meaningful status explanation or revised ETA from Flipkart?
+                      Have you received a substantive explanation or revised delivery date from support?
                     </span>
                     <p className="text-[#5B6573]">
                       Check if customer support has communicated a substantive reason or confirmed revised tracking date.
@@ -369,7 +411,7 @@ export default function ReportPage() {
             <div className="pt-4 border-t border-[#E1E5EB] flex justify-end">
               <button
                 type="button"
-                disabled={!promisedDeliveryDate}
+                disabled={!issueId}
                 onClick={() => setStep(2)}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1B44AA] disabled:opacity-50 transition-colors"
               >
@@ -384,46 +426,27 @@ export default function ReportPage() {
         {step === 2 && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-bold text-[#17212F]">Step 2: Describe the Experience</h2>
+              <h2 className="text-xl font-bold text-[#17212F]">Step 2: Factual Experience</h2>
               <p className="text-xs text-[#5B6573] mt-1">
-                Provide a factual, objective overview of the fulfillment issue.
+                Describe the delivery failure factually. Detailed descriptions are private by default.
               </p>
             </div>
 
-            {/* Privacy Warning */}
+            {/* Strict Privacy Warning */}
             <div className="rounded-lg border border-[#B42318]/20 bg-[#FEF3F2] p-4 text-xs text-[#B42318] flex items-start gap-2.5">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
-                <strong className="font-semibold">Privacy Protection: </strong>
-                Do NOT include passwords, credit/debit card numbers, UPI PINs, exact home addresses, or phone numbers in your text descriptions.
+                <strong className="font-semibold">Data Protection Rule: </strong>
+                Do <strong>NOT</strong> include passwords, OTPs, credit/debit card numbers, UPI PINs, exact home addresses, or phone numbers in your text description.
               </div>
             </div>
 
             <div className="space-y-4">
-              {/* Short Summary */}
+              {/* Detailed description (Mandatory) */}
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-[#17212F]">
-                    Short Summary (10 - 140 chars) *
-                  </label>
-                  <span className="text-[10px] text-[#5B6573]">{summary.length}/140</span>
-                </div>
-                <input
-                  type="text"
-                  required
-                  maxLength={140}
-                  placeholder="e.g. Order delayed by 5 days; tracking frozen at local hub with no response."
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  className="w-full rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-2.5 text-sm text-[#17212F] focus:border-[#2457D6]"
-                />
-              </div>
-
-              {/* Detailed description */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#17212F]">
-                    Detailed Description *
+                    Factual Description * (At least 20 chars)
                   </label>
                   <span className="text-[10px] text-[#5B6573]">{description.length}/2500</span>
                 </div>
@@ -432,35 +455,59 @@ export default function ReportPage() {
                   required
                   minLength={20}
                   maxLength={2500}
-                  placeholder="Describe the timeline, communication attempts, bot responses, or lack of status updates..."
+                  placeholder="Describe the timeline, communication attempts, automated responses, or lack of status updates..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-2.5 text-sm text-[#17212F] focus:border-[#2457D6]"
                 ></textarea>
                 <span className="text-[11px] text-[#5B6573] mt-0.5 block">
-                  Factual descriptions are confidential and used exclusively for evidence review.
+                  Raw complaint descriptions remain confidential and are used strictly by reviewers to verify evidence patterns.
                 </span>
               </div>
 
-              {/* Desired outcome */}
+              {/* Short Summary (Optional) */}
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[#17212F] mb-1">
-                  Desired Resolution Outcome (Optional)
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-[#5B6573]">
+                    Short Headline / Summary (Optional, max 140 chars)
+                  </label>
+                  <span className="text-[10px] text-[#5B6573]">{summary.length}/140</span>
+                </div>
+                <input
+                  type="text"
+                  maxLength={140}
+                  placeholder="e.g. Package stalled at courier hub for 5 days with no tracking updates."
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  className="w-full rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-2.5 text-sm text-[#17212F] focus:border-[#2457D6]"
+                />
+                <span className="text-[11px] text-[#5B6573] mt-0.5 block">
+                  Leave empty to have a safe automated summary generated from your description.
+                </span>
+              </div>
+
+              {/* Masked Order Reference (Optional) */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#5B6573] mb-1">
+                  Order Tracking Reference (Optional)
                 </label>
                 <input
                   type="text"
-                  maxLength={300}
-                  placeholder="e.g. Prompt delivery within 24h, or immediate unconditional refund."
-                  value={resolutionOutcome}
-                  onChange={(e) => setResolutionOutcome(e.target.value)}
+                  maxLength={50}
+                  placeholder="e.g. OD123456... (Mask middle numbers)"
+                  value={orderReference}
+                  onChange={(e) => setOrderReference(e.target.value)}
                   className="w-full rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-2 text-sm text-[#17212F] focus:border-[#2457D6]"
                 />
+                <span className="text-[11px] text-[#5B6573] mt-0.5 block">
+                  Optional. For verification with courier tracking logs. Never published openly.
+                </span>
               </div>
 
-              {/* Region */}
+              {/* Region (Optional) */}
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-[#17212F] mb-1">
-                  Approximate State or Union Territory
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#5B6573] mb-1">
+                  Approximate State or Union Territory (Optional)
                 </label>
                 <select
                   value={approximateRegion}
@@ -474,8 +521,23 @@ export default function ReportPage() {
                   ))}
                 </select>
                 <span className="text-[11px] text-[#5B6573] mt-0.5 block">
-                  Used exclusively for geographic pattern aggregation (e.g. regional hub delays).
+                  Used solely to identify broad regional logistics bottlenecks across India.
                 </span>
+              </div>
+
+              {/* Desired outcome (Optional) */}
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-[#5B6573] mb-1">
+                  Desired Resolution (Optional)
+                </label>
+                <input
+                  type="text"
+                  maxLength={300}
+                  placeholder="e.g. Expedited delivery within 24h or immediate unconditional refund."
+                  value={resolutionOutcome}
+                  onChange={(e) => setResolutionOutcome(e.target.value)}
+                  className="w-full rounded-lg border border-[#E1E5EB] bg-white px-3.5 py-2 text-sm text-[#17212F] focus:border-[#2457D6]"
+                />
               </div>
             </div>
 
@@ -491,7 +553,7 @@ export default function ReportPage() {
 
               <button
                 type="button"
-                disabled={summary.trim().length < 10 || description.trim().length < 20}
+                disabled={description.trim().length < 20}
                 onClick={() => setStep(3)}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1B44AA] disabled:opacity-50 transition-colors"
               >
@@ -502,31 +564,30 @@ export default function ReportPage() {
           </div>
         )}
 
-        {/* STEP 3: Evidence */}
+        {/* STEP 3: Evidence (Optional) */}
         {step === 3 && (
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-[#17212F]">Step 3: Supporting Evidence (Optional)</h2>
               <p className="text-xs text-[#5B6573] mt-1">
-                Attach supporting documents to elevate your complaint to Verified status.
+                Attach tracking screenshots or order confirmations. Evidence is private and optional.
               </p>
             </div>
 
-            {/* Evidence Policy Card */}
             <div className="rounded-lg border border-[#E1E5EB] bg-[#F7F8FA] p-4 text-xs space-y-2">
               <div className="flex items-center gap-2 font-semibold text-[#17212F]">
                 <Lock className="h-4 w-4 text-[#087E8B]" />
                 <span>Evidence Privacy Guarantee</span>
               </div>
               <ul className="list-disc pl-4 space-y-1 text-[#5B6573]">
-                <li>Evidence files are strictly private by default and stored in secure, access-controlled storage.</li>
-                <li>Evidence is <strong>never</strong> published openly on public dashboard feeds.</li>
-                <li>Please blackout or redact order account passwords, bank account numbers, and complete addresses.</li>
-                <li>Submitting evidence does not guarantee automated verification; moderators review documentation against stated criteria.</li>
+                <li>Evidence files are stored in private, access-controlled object storage.</li>
+                <li>Evidence is <strong>never</strong> published openly or indexed on search engines.</li>
+                <li>Please blackout or crop out passwords, payment card numbers, and complete addresses.</li>
+                <li>Attaching evidence is voluntary; unverified factual reports still contribute to issue statistics.</li>
               </ul>
             </div>
 
-            {/* File upload box */}
+            {/* File upload area */}
             <div className="border-2 border-dashed border-[#E1E5EB] rounded-xl p-6 text-center hover:border-[#2457D6] transition-colors">
               <input
                 type="file"
@@ -538,10 +599,10 @@ export default function ReportPage() {
               <label htmlFor="evidence-input" className="cursor-pointer flex flex-col items-center">
                 <Upload className="h-8 w-8 text-[#5B6573] mb-2" />
                 <span className="text-sm font-semibold text-[#2457D6]">
-                  Click to select a file (PNG, JPG, PDF up to 10MB)
+                  Click to select file (PNG, JPG, WEBP, PDF up to 10MB)
                 </span>
                 <span className="text-xs text-[#5B6573] mt-1">
-                  Order status screenshot, invoice confirmation, or support chat transcript
+                  Order tracking screenshot, delayed notification, or support chat
                 </span>
               </label>
 
@@ -574,7 +635,7 @@ export default function ReportPage() {
                 <div className="text-xs text-[#17212F]">
                   <span className="font-semibold">I confirm that personal financial and sensitive details are redacted.</span>
                   <p className="text-[#5B6573] mt-0.5">
-                    I confirm that I have removed or blacked out passwords, full addresses, and payment credentials.
+                    I confirm that I have removed or blacked out passwords, bank cards, full addresses, and unnecessary personal identifiers.
                   </p>
                 </div>
               </label>
@@ -603,106 +664,116 @@ export default function ReportPage() {
           </div>
         )}
 
-        {/* STEP 4: Review and Submit */}
+        {/* STEP 4: Review and Submit (Sign-in is OPTIONAL) */}
         {step === 4 && (
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-bold text-[#17212F]">Step 4: Review and Submit</h2>
               <p className="text-xs text-[#5B6573] mt-1">
-                Please verify your information before creating this public-interest complaint record.
+                Verify your factual report. No account or password is required.
               </p>
             </div>
 
-            {/* Summary Box */}
+            {/* Factual Summary Card */}
             <div className="rounded-lg border border-[#E1E5EB] bg-[#F7F8FA] p-4 text-xs space-y-3">
               <div className="grid grid-cols-2 gap-2 pb-3 border-b border-[#E1E5EB]">
                 <div>
-                  <span className="text-[#5B6573]">Company:</span>
+                  <span className="text-[#5B6573]">Platform:</span>
                   <p className="font-semibold text-[#17212F]">Flipkart (India)</p>
                 </div>
                 <div>
-                  <span className="text-[#5B6573]">Promised Delivery Date:</span>
-                  <p className="font-semibold text-[#17212F]">{promisedDeliveryDate}</p>
+                  <span className="text-[#5B6573]">Promised Date:</span>
+                  <p className="font-semibold text-[#17212F]">{promisedDeliveryDate || "Not specified"}</p>
                 </div>
                 <div>
-                  <span className="text-[#5B6573]">Order Status:</span>
+                  <span className="text-[#5B6573]">Shipment Status:</span>
                   <p className="font-semibold text-[#17212F]">{orderStatus}</p>
                 </div>
                 <div>
-                  <span className="text-[#5B6573]">State / Region:</span>
+                  <span className="text-[#5B6573]">Region:</span>
                   <p className="font-semibold text-[#17212F]">{approximateRegion}</p>
                 </div>
               </div>
 
               <div>
-                <span className="text-[#5B6573]">Summary:</span>
-                <p className="font-semibold text-[#17212F] mt-0.5">{summary}</p>
-              </div>
-
-              <div>
-                <span className="text-[#5B6573]">Description:</span>
+                <span className="text-[#5B6573]">Factual Description:</span>
                 <p className="text-[#17212F] mt-0.5 whitespace-pre-wrap">{description}</p>
               </div>
 
               <div>
-                <span className="text-[#5B6573]">Evidence Attached:</span>
+                <span className="text-[#5B6573]">Evidence File:</span>
                 <p className="font-medium text-[#17212F] mt-0.5">
-                  {evidenceFile ? `${evidenceFile.fileName} (Private)` : "No evidence attached (Unverified)"}
+                  {evidenceFile ? `${evidenceFile.fileName} (Private & Redacted)` : "None attached (Unverified)"}
                 </p>
               </div>
             </div>
 
-            {/* User Authentication Check */}
-            {!user ? (
-              <div className="rounded-lg border border-[#2457D6]/30 bg-[#2457D6]/5 p-5 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-[#2457D6]">
-                  <Shield className="h-4 w-4" />
-                  <span>Verified Citizen Account Required</span>
-                </div>
-                <p className="text-xs text-[#5B6573]">
-                  To prevent malicious automated spam and enable you to mark your complaint resolved when delivered, please enter your email and password.
-                </p>
-                <form onSubmit={handleInlineAuth} className="space-y-3 pt-1">
-                  {authError && (
-                    <div className="text-xs text-[#B42318] bg-[#FEF3F2] p-2 rounded border border-[#B42318]/20">
-                      {authError}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input
-                      type="email"
-                      required
-                      placeholder="Your email address"
-                      value={authEmail}
-                      onChange={(e) => setAuthEmail(e.target.value)}
-                      className="rounded-lg border border-[#E1E5EB] bg-white px-3 py-2 text-xs text-[#17212F]"
-                    />
-                    <input
-                      type="password"
-                      required
-                      placeholder="Password (min 8 chars)"
-                      value={authPassword}
-                      onChange={(e) => setAuthPassword(e.target.value)}
-                      className="rounded-lg border border-[#E1E5EB] bg-white px-3 py-2 text-xs text-[#17212F]"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={authLoading || !authEmail || authPassword.length < 8}
-                    className="rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#1B44AA] disabled:opacity-50"
-                  >
-                    {authLoading ? "Authenticating..." : "Sign in / Register to Continue"}
-                  </button>
-                </form>
+            {/* Account Status / Optional Sign-in */}
+            {user ? (
+              <div className="rounded-lg border border-[#18794E]/20 bg-[#EDF7F1] p-3 text-xs text-[#18794E] flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <UserCheck className="h-4 w-4" />
+                  Submitting as registered user: <strong>{user.email}</strong>
+                </span>
+                <span className="text-[11px] underline">Linked to Account</span>
               </div>
             ) : (
-              <div className="rounded-lg border border-[#18794E]/20 bg-[#EDF7F1] p-3 text-xs text-[#18794E] flex items-center justify-between">
-                <span>Signed in as <strong>{user.email}</strong></span>
-                <span className="text-[11px] text-[#18794E] underline">Account Active</span>
+              <div className="rounded-lg border border-[#E1E5EB] bg-white p-4 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-semibold text-[#17212F]">
+                    <Shield className="h-4 w-4 text-[#2457D6]" />
+                    <span>Submitting Anonymously (Default)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowOptionalAuth(!showOptionalAuth)}
+                    className="text-xs font-semibold text-[#2457D6] hover:underline"
+                  >
+                    {showOptionalAuth ? "Cancel Sign-in" : "Sign in to attach to account (Optional)"}
+                  </button>
+                </div>
+                <p className="text-[#5B6573]">
+                  You do not need to create an account. You will receive a secure, one-time Access Key to view status, submit additional evidence, or request deletion at any time.
+                </p>
+
+                {showOptionalAuth && (
+                  <form onSubmit={handleInlineAuth} className="pt-3 border-t border-[#E1E5EB] space-y-3">
+                    {authError && (
+                      <div className="text-xs text-[#B42318] bg-[#FEF3F2] p-2 rounded border border-[#B42318]/20">
+                        {authError}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input
+                        type="email"
+                        required
+                        placeholder="Your email address"
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        className="rounded-lg border border-[#E1E5EB] bg-white px-3 py-2 text-xs text-[#17212F]"
+                      />
+                      <input
+                        type="password"
+                        required
+                        placeholder="Password (min 8 chars)"
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        className="rounded-lg border border-[#E1E5EB] bg-white px-3 py-2 text-xs text-[#17212F]"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={authLoading || !authEmail || authPassword.length < 8}
+                      className="rounded-lg bg-[#2457D6] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-[#1B44AA] disabled:opacity-50"
+                    >
+                      {authLoading ? "Authenticating..." : "Sign in / Register"}
+                    </button>
+                  </form>
+                )}
               </div>
             )}
 
-            {/* Legal Confirmations */}
+            {/* Mandatory Certifications */}
             <div className="space-y-3 pt-2">
               <label className="flex items-start gap-2.5 cursor-pointer">
                 <input
@@ -712,7 +783,7 @@ export default function ReportPage() {
                   className="mt-0.5 h-4 w-4 rounded border-[#E1E5EB] text-[#2457D6] focus:ring-[#2457D6]"
                 />
                 <span className="text-xs text-[#17212F]">
-                  I certify that the information submitted is accurate and factual to the best of my knowledge, and I have the right to submit any attached documentation.
+                  <strong>Factual Accuracy Certification: </strong>I certify that the information provided is factually accurate to the best of my knowledge, and I hold legitimate rights to any attached documentation.
                 </span>
               </label>
 
@@ -724,7 +795,7 @@ export default function ReportPage() {
                   className="mt-0.5 h-4 w-4 rounded border-[#E1E5EB] text-[#2457D6] focus:ring-[#2457D6]"
                 />
                 <span className="text-xs text-[#17212F]">
-                  I understand that Awaz is an independent public-interest platform, that my report will be aggregated anonymously for consumer advocacy, and that Awaz does not provide legal representation.
+                  <strong>Public Evidence Charter: </strong>I understand that Awaz is an independent non-profit public interest platform. My report will be aggregated anonymously for consumer advocacy, and Awaz does not provide corporate redressal or legal representation.
                 </span>
               </label>
             </div>
@@ -747,19 +818,25 @@ export default function ReportPage() {
 
               <button
                 type="button"
-                disabled={!user || !confirmationAccurate || !confirmationConsent || submitting}
+                disabled={!confirmationAccurate || !confirmationConsent || submitting}
                 onClick={handleSubmitComplaint}
                 className="inline-flex items-center gap-2 rounded-lg bg-[#2457D6] px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#1B44AA] disabled:opacity-50 transition-colors"
               >
-                {submitting ? "Submitting to Awaz..." : "Submit Factual Report"}
+                <span>
+                  {submitting
+                    ? "Recording Grievance..."
+                    : user
+                    ? "Submit Factual Report"
+                    : "Submit Report Anonymously"}
+                </span>
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 5: Real Confirmation */}
+        {/* STEP 5: Real Confirmation & Access Key */}
         {step === 5 && submissionResult && (
-          <div className="text-center py-6 space-y-4">
+          <div className="text-center py-6 space-y-5">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#EDF7F1] text-[#18794E]">
               <CheckCircle2 className="h-8 w-8" />
             </div>
@@ -769,30 +846,63 @@ export default function ReportPage() {
             </h2>
 
             <p className="text-xs text-[#5B6573] max-w-md mx-auto leading-relaxed">
-              Your grievance has been safely saved and incorporated into our aggregated evidence system.
+              Your grievance has been safely saved and incorporated into our aggregated evidence system under reference standard.
             </p>
 
+            {/* Public Reference Box */}
             <div className="rounded-lg border border-[#E1E5EB] bg-[#F7F8FA] p-4 max-w-sm mx-auto text-left space-y-2">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-[#5B6573]">Reference Number:</span>
+                <span className="text-[#5B6573]">Public Reference:</span>
                 <span className="font-bold text-[#17212F] tabular-nums font-mono">
                   {submissionResult.referenceNumber}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
-                <span className="text-[#5B6573]">Verification Status:</span>
+                <span className="text-[#5B6573]">Initial Status:</span>
                 <span className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold bg-[#EDF7F1] text-[#18794E]">
                   {submissionResult.verificationStatus}
                 </span>
               </div>
             </div>
 
+            {/* Anonymous Access Key Box (Displayed ONCE) */}
+            {submissionResult.accessKey && (
+              <div className="rounded-xl border border-[#D97706]/40 bg-[#FFFBEB] p-5 max-w-md mx-auto text-left space-y-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#92400E]">
+                  <KeyRound className="h-4 w-4" />
+                  <span>Your Secret Anonymous Access Key (Save Now)</span>
+                </div>
+                <p className="text-[11px] text-[#78350F] leading-relaxed">
+                  We store only an irreversible cryptographic hash of this key. If lost, it cannot be recovered. You need this key to view private details, update resolution status, or request deletion without an account.
+                </p>
+
+                <div className="flex items-center gap-2 bg-white rounded-lg border border-[#D97706]/30 p-2 font-mono text-xs text-[#17212F] break-all">
+                  <span className="flex-1">{submissionResult.accessKey}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyAccessKey(submissionResult.accessKey!)}
+                    className="shrink-0 p-1.5 rounded-md hover:bg-gray-100 text-[#92400E]"
+                    title="Copy Access Key"
+                  >
+                    {copiedKey ? <Check className="h-4 w-4 text-[#18794E]" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                {copiedKey && (
+                  <p className="text-[11px] font-semibold text-[#18794E]">
+                    ✓ Access key copied to clipboard! Save it in a password manager or secure notes.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
               <Link
-                href="/my-reports"
-                className="w-full sm:w-auto rounded-lg bg-[#2457D6] px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#1B44AA]"
+                href={`/track?ref=${submissionResult.referenceNumber}${submissionResult.accessKey ? `&key=${submissionResult.accessKey}` : ""}`}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#2457D6] px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-[#1B44AA]"
               >
-                View in My Reports
+                <Eye className="h-4 w-4" />
+                <span>Track or Manage Report</span>
               </Link>
               <Link
                 href={`/issues/${submissionResult.issueSlug}`}
@@ -803,7 +913,7 @@ export default function ReportPage() {
             </div>
 
             <div className="pt-4 text-xs text-[#5B6573]">
-              Need to escalate urgently?{" "}
+              Need urgent dispute redressal?{" "}
               <a
                 href="https://consumerhelpline.gov.in"
                 target="_blank"

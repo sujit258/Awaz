@@ -50,6 +50,7 @@ export default function Navbar() {
   const navLinks = [
     { href: "/", label: "Dashboard" },
     { href: "/issues", label: "Explore Issues" },
+    { href: "/track", label: "Track Report" },
     { href: "/methodology", label: "Methodology" },
     { href: "/about", label: "How It Works" },
   ];

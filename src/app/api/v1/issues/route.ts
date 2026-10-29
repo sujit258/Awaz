@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
           select: {
             reports: {
               where: {
+                isDeleted: false,
                 verificationStatus: { not: "REJECTED" },
                 ...(isProduction ? { isDemo: false } : {}),
               },
@@ -52,20 +53,34 @@ export async function GET(req: NextRequest) {
         const evidenceCount = await prisma.complaintReport.count({
           where: {
             issueId: issue.id,
+            isDeleted: false,
             verificationStatus: { in: ["EVIDENCE_SUBMITTED", "VERIFIED"] },
             ...(isProduction ? { isDemo: false } : {}),
           },
         });
 
-        const uniqueReporters = await prisma.complaintReport.findMany({
-          where: {
-            issueId: issue.id,
-            verificationStatus: { not: "REJECTED" },
-            ...(isProduction ? { isDemo: false } : {}),
-          },
-          select: { userId: true },
-          distinct: ["userId"],
-        });
+        const [registeredReporters, anonReporters] = await Promise.all([
+          prisma.complaintReport.findMany({
+            where: {
+              issueId: issue.id,
+              isDeleted: false,
+              userId: { not: null },
+              verificationStatus: { not: "REJECTED" },
+              ...(isProduction ? { isDemo: false } : {}),
+            },
+            select: { userId: true },
+            distinct: ["userId"],
+          }),
+          prisma.complaintReport.count({
+            where: {
+              issueId: issue.id,
+              isDeleted: false,
+              userId: null,
+              verificationStatus: { not: "REJECTED" },
+              ...(isProduction ? { isDemo: false } : {}),
+            },
+          }),
+        ]);
 
         return {
           id: issue.id,
@@ -77,7 +92,7 @@ export async function GET(req: NextRequest) {
           publicationStatus: issue.publicationStatus,
           publishedAt: issue.publishedAt,
           totalReports: issue._count.reports,
-          uniqueReporters: uniqueReporters.length,
+          uniqueReporters: registeredReporters.length + anonReporters,
           evidenceBackedReports: evidenceCount,
           activeCampaignsCount: issue._count.campaigns,
           updatesCount: issue._count.updates,

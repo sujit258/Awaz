@@ -88,6 +88,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/track" className="hover:text-[#172B4D] transition-colors">
+                  Track Report
+                </Link>
+              </li>
+              <li>
                 <Link href="/methodology" className="hover:text-[#172B4D] transition-colors">
                   Counting Methodology
                 </Link>
